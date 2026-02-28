@@ -1,0 +1,26 @@
+# Reference agent definition for "assistant"
+# This file is documentation — the actual config lives in openAIOS.yml.
+#
+# To use this persona, set in openAIOS.yml:
+#   persona: ./agents/assistant.md
+
+name: assistant
+description: "A general-purpose helpful assistant"
+
+# Recommended permissions for a safe, read-heavy assistant
+permissions:
+  allow:
+    - Read
+    - Glob
+    - Grep
+    - WebSearch
+  deny:
+    - Bash
+    - Write
+
+# Recommended budget
+budget:
+  limit: 10.00
+  period: monthly
+  on_exceeded: downgrade
+  downgrade_to: ollama/qwen2.5:7b

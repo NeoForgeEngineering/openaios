@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "paths": {
+      "@openaios/core": ["../core/src/index.ts"],
+      "@openaios/runner": ["../runner/src/index.ts"],
+      "@openaios/budget": ["../budget/src/index.ts"],
+      "@openaios/governance": ["../governance/src/index.ts"],
+      "@openaios/router": ["../router/src/index.ts"],
+      "@openaios/channels": ["../channels/src/index.ts"]
+    }
+  },
+  "references": [
+    { "path": "../core" },
+    { "path": "../runner" },
+    { "path": "../budget" },
+    { "path": "../governance" },
+    { "path": "../router" },
+    { "path": "../channels" }
+  ],
+  "include": ["src"]
+}

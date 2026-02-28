@@ -1,0 +1,28 @@
+{
+  "name": "@openaios/governance",
+  "version": "0.1.0",
+  "description": "Governance adapters for openAIOS (LocalGovernance + BRGovernance)",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "node --test src/__tests__/**/*.test.ts"
+  },
+  "dependencies": {
+    "@openaios/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}

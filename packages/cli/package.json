@@ -1,0 +1,38 @@
+{
+  "name": "@openaios/cli",
+  "version": "0.1.0",
+  "description": "openAIOS CLI — init, start, agent, status",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "openaios": "./dist/bin/openaios.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "dev": "node --watch dist/bin/openaios.js"
+  },
+  "dependencies": {
+    "@openaios/core": "workspace:*",
+    "@openaios/runner": "workspace:*",
+    "@openaios/budget": "workspace:*",
+    "@openaios/governance": "workspace:*",
+    "@openaios/router": "workspace:*",
+    "@openaios/channels": "workspace:*",
+    "commander": "^12.0.0",
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}

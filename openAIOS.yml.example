@@ -1,0 +1,92 @@
+# openAIOS configuration example
+# Copy to openAIOS.yml and customise. Never commit openAIOS.yml — it contains secrets.
+# All ${ENV_VAR} references are resolved from the environment at startup.
+
+agents:
+  - name: assistant
+    # Inline persona or path to a CLAUDE.md file
+    persona: "You are a helpful assistant. Be concise and accurate."
+    # persona: ./agents/assistant.md
+
+    model:
+      default: ollama/qwen2.5:7b      # Free tier — local model
+      premium: claude-code             # Escalate for complex tasks (future)
+
+    channels:
+      telegram:
+        token: ${TELEGRAM_TOKEN_ASSISTANT}
+      # discord:
+      #   token: ${DISCORD_TOKEN_ASSISTANT}
+
+    # Deny-by-default: only tools listed in 'allow' are permitted.
+    # Remove 'allow' entirely to block ALL tools.
+    permissions:
+      allow:
+        - Read
+        - Write
+        - Glob
+        - Grep
+      deny:
+        - Bash          # Never allow shell execution for this agent
+        - WebSearch     # Disable external web access
+
+    runner:
+      mode: native      # 'native' or 'docker' (docker coming in a future release)
+      # docker:
+      #   image: node:22-slim
+      #   memory: 512m
+
+  # Example: a second agent on the same Telegram account (different bot token)
+  # - name: coder
+  #   persona: "You are an expert software engineer. Write clean, tested code."
+  #   model:
+  #     default: claude-code
+  #   channels:
+  #     telegram:
+  #       token: ${TELEGRAM_TOKEN_CODER}
+  #   permissions:
+  #     allow:
+  #       - Read
+  #       - Write
+  #       - Bash
+  #       - Glob
+  #       - Grep
+
+models:
+  providers:
+    ollama:
+      base_url: "http://localhost:11434"
+
+    # Uncomment and set api_key for cloud providers:
+    # anthropic:
+    #   api_key: ${ANTHROPIC_API_KEY}
+    # groq:
+    #   api_key: ${GROQ_API_KEY}
+    # openrouter:
+    #   api_key: ${OPENROUTER_API_KEY}
+
+    # claude-code uses the local claude CLI:
+    claude-code:
+      bin: claude     # Path to claude binary (defaults to searching PATH)
+
+budget:
+  period: monthly   # daily | weekly | monthly
+  agents:
+    assistant:
+      limit: 10.00          # USD per period
+      warning_at: 0.80      # Warn at 80% of limit
+      on_exceeded: downgrade # block | downgrade | warn
+      downgrade_to: ollama/qwen2.5:7b
+
+# governance:
+#   br:                     # Optional — omit for standalone (no BR account needed)
+#     url: ${BR_URL}
+#     token: ${BR_TOKEN}
+#     fail_secure: false    # true = block if BR unreachable; false = allow (default)
+
+network:
+  bind: tailscale   # 'tailscale' | 'localhost' | '0.0.0.0' | specific IP
+  port: 3000        # Used for webhook/web-chat channels
+
+data:
+  dir: ./data       # Runtime data directory (sessions, SQLite). Relative to CWD.

@@ -1,0 +1,78 @@
+name: Deploy to forge-smith
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-forge-smith
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment: forge-smith
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - name: Deploy via SSH
+        env:
+          REMOTE_HOST: ${{ secrets.FORGE_SMITH_HOST }}
+          REMOTE_USER: aios
+          REMOTE_DIR: /home/aios/openaios
+          SSH_PRIVATE_KEY: ${{ secrets.FORGE_SMITH_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${REMOTE_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          # Sync built files
+          rsync -avz --delete \
+            --exclude '.env' \
+            --exclude 'openAIOS.yml' \
+            --exclude 'data/' \
+            --exclude 'workspaces/' \
+            --exclude 'node_modules/' \
+            --exclude '.git/' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            . "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
+
+          # Install and restart
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${REMOTE_USER}@${REMOTE_HOST}" \
+            "cd ${REMOTE_DIR} && pnpm install --prod --frozen-lockfile && sudo systemctl restart openaios.service"
+
+      - name: Verify deployment
+        env:
+          REMOTE_HOST: ${{ secrets.FORGE_SMITH_HOST }}
+          SSH_PRIVATE_KEY: ${{ secrets.FORGE_SMITH_SSH_KEY }}
+        run: |
+          sleep 5
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "aios@${REMOTE_HOST}" \
+            "systemctl is-active openaios.service"

@@ -1,0 +1,28 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.turbo/
+
+# Runtime data — never in git
+data/
+workspaces/
+*.sessions/
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets — never in git
+.env
+.env.*
+!.env.example
+openAIOS.yml
+!openAIOS.yml.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
