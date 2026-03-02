@@ -55,8 +55,8 @@ export class OllamaRunner implements RunnerAdapter {
       claudeSessionId: input.sessionKey, // used as a stable key, not a real claude session
       output,
       model: `ollama/${model}`,
-      inputTokens: data.prompt_eval_count,
-      outputTokens: data.eval_count,
+      ...(data.prompt_eval_count !== undefined && { inputTokens: data.prompt_eval_count }),
+      ...(data.eval_count !== undefined && { outputTokens: data.eval_count }),
     }
   }
 

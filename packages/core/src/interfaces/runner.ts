@@ -44,6 +44,23 @@ export interface StreamChunk {
   data?: unknown
 }
 
+export interface AgentBusRequest {
+  fromAgent: string
+  toAgent: string
+  message: string
+  /** Session key from the calling agent's turn */
+  callerSessionKey: string
+}
+
+export interface AgentBusResponse {
+  output: string
+  costUsd?: number
+}
+
+export interface AgentBus {
+  request(req: AgentBusRequest): Promise<AgentBusResponse>
+}
+
 export type RunnerMode = 'native' | 'docker'
 
 export interface RunnerAdapter {

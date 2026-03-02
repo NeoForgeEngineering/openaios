@@ -62,8 +62,8 @@ export class OpenAICompatRunner implements RunnerAdapter {
       claudeSessionId: input.sessionKey,
       output,
       model: data.model,
-      inputTokens: data.usage?.prompt_tokens,
-      outputTokens: data.usage?.completion_tokens,
+      ...(data.usage?.prompt_tokens !== undefined && { inputTokens: data.usage.prompt_tokens }),
+      ...(data.usage?.completion_tokens !== undefined && { outputTokens: data.usage.completion_tokens }),
     }
   }
 

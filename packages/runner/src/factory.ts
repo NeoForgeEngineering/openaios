@@ -2,6 +2,8 @@ import type { RunnerAdapter, ModelProviders, RunnerConfig } from '@openaios/core
 import { ClaudeCodeRunner } from './claude-code/runner.js'
 import { OllamaRunner } from './ollama/runner.js'
 import { OpenAICompatRunner } from './openai-compat/runner.js'
+import { DockerRunner } from './docker/runner.js'
+import type { ContainerOrchestrator } from './docker/orchestrator.js'
 
 /**
  * Resolve a model string to a provider name.
@@ -18,15 +20,31 @@ export function resolveProvider(model: string): string {
   return slash !== -1 ? model.slice(0, slash) : 'openai'
 }
 
+export interface CreateRunnerOptions {
+  /** Required when runnerConfig.mode === 'docker' */
+  orchestrator?: ContainerOrchestrator
+  /** Agent name — required when using docker mode */
+  agentName?: string
+}
+
 export function createRunner(
   model: string,
   providers: ModelProviders,
-  runnerConfig: RunnerConfig
+  runnerConfig: RunnerConfig,
+  options?: CreateRunnerOptions
 ): RunnerAdapter {
   if (runnerConfig.mode === 'docker') {
-    throw new Error(
-      'Docker runner mode is not yet implemented. Set runner.mode to "native" in your config.'
-    )
+    if (!options?.orchestrator) {
+      throw new Error('Docker mode requires ContainerOrchestrator (pass via options.orchestrator)')
+    }
+    if (!options?.agentName) {
+      throw new Error('Docker mode requires agentName (pass via options.agentName)')
+    }
+    return new DockerRunner({
+      orchestrator: options.orchestrator,
+      agentName: options.agentName,
+      ...(runnerConfig.docker !== undefined && { containerConfig: runnerConfig.docker }),
+    })
   }
 
   const provider = resolveProvider(model)
@@ -34,12 +52,12 @@ export function createRunner(
   switch (provider) {
     case 'claude-code': {
       const cfg = providers['claude-code']
-      return new ClaudeCodeRunner({ bin: cfg?.bin })
+      return new ClaudeCodeRunner(cfg?.bin ? { bin: cfg.bin } : {})
     }
 
     case 'ollama': {
       const cfg = providers.ollama
-      return new OllamaRunner({ baseUrl: cfg?.base_url })
+      return new OllamaRunner(cfg?.base_url ? { baseUrl: cfg.base_url } : {})
     }
 
     case 'anthropic': {
@@ -77,7 +95,7 @@ export function createRunner(
       if (providers.openai) {
         return new OpenAICompatRunner({
           apiKey: providers.openai.api_key,
-          baseUrl: providers.openai.base_url,
+          ...(providers.openai.base_url && { baseUrl: providers.openai.base_url }),
           defaultModel: model,
         })
       }

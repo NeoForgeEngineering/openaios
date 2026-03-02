@@ -8,6 +8,7 @@ import type {
   SessionStore,
 } from '@openaios/core'
 import type { BudgetManager } from '@openaios/budget'
+import type { AgentBus } from './agent-bus.js'
 
 export interface AgentRoute {
   agentName: string
@@ -27,6 +28,8 @@ export interface RouterCoreOptions {
   budget: BudgetManager
   /** Base directory for agent workspaces */
   workspacesDir: string
+  /** Optional agent bus for cross-agent calls */
+  bus?: AgentBus
 }
 
 const MAX_MESSAGE_BYTES = 16 * 1024 // 16KB
@@ -36,6 +39,10 @@ const AGENT_NAME_REGEX = /^[a-z0-9-]+$/
 export class RouterCore {
   private readonly opts: RouterCoreOptions
   private readonly routesByChannel = new Map<ChannelAdapter, AgentRoute>()
+
+  getBus(): AgentBus | undefined {
+    return this.opts.bus
+  }
 
   constructor(opts: RouterCoreOptions) {
     this.opts = opts
@@ -103,7 +110,7 @@ export class RouterCore {
       const result = await route.runner.run({
         agentName: route.agentName,
         sessionKey: userId,
-        claudeSessionId: session?.claudeSessionId,
+        ...(session?.claudeSessionId !== undefined && { claudeSessionId: session.claudeSessionId }),
         message: msg.text,
         systemPrompt: route.systemPrompt,
         workspaceDir: join(this.opts.workspacesDir, route.agentName),

@@ -63,6 +63,13 @@ const AgentChannelsSchema = z.object({
   webhook: WebhookChannelSchema.optional(),
 })
 
+const CapabilitiesSchema = z.object({
+  /** Provision a Chromium CDP sidecar for browser automation */
+  browser: z.boolean().default(false),
+  /** List of agent names this agent is permitted to call via the agent bus */
+  'agent-calls': z.array(z.string()).default([]),
+})
+
 const AgentSchema = z.object({
   name: z
     .string()
@@ -73,6 +80,7 @@ const AgentSchema = z.object({
   channels: AgentChannelsSchema,
   permissions: AgentPermissionsSchema.default({}),
   runner: RunnerConfigSchema.default({}),
+  capabilities: CapabilitiesSchema.default({}),
 })
 
 const OllamaProviderSchema = z.object({
@@ -129,6 +137,8 @@ const NetworkSchema = z.object({
   bind: z.union([z.literal('tailscale'), z.literal('localhost'), z.string()]).default('tailscale'),
   /** Port for webhook/web-chat channels */
   port: z.number().int().default(3000),
+  /** Port for the internal agent bus HTTP server (0 = random) */
+  bus_port: z.number().int().default(0),
 })
 
 const DataSchema = z.object({
@@ -154,3 +164,4 @@ export type AgentConfig = z.infer<typeof AgentSchema>
 export type AgentBudgetConfig = z.infer<typeof AgentBudgetSchema>
 export type RunnerConfig = z.infer<typeof RunnerConfigSchema>
 export type ModelProviders = z.infer<typeof ModelProvidersSchema>
+export type AgentCapabilities = z.infer<typeof CapabilitiesSchema>

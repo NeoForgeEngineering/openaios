@@ -1,0 +1,14 @@
+#!/bin/bash
+# call_agent — invoke another OpenAIOS agent via the internal bus
+# Usage: call_agent <agent-name> "<message>"
+set -euo pipefail
+
+AGENT="${1:?Usage: call_agent <agent-name> <message>}"
+MESSAGE="${2:?Usage: call_agent <agent-name> <message>}"
+
+curl -sf \
+  -X POST "${OPENAIOS_BUS_URL}/internal/bus/message" \
+  -H "Authorization: Bearer ${OPENAIOS_BUS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{\"fromAgent\":\"${OPENAIOS_AGENT_NAME}\",\"toAgent\":\"${AGENT}\",\"message\":$(printf '%s' "$MESSAGE" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),\"callerSessionKey\":\"bus:${OPENAIOS_AGENT_NAME}\"}" \
+  | python3 -c "import json,sys; print(json.load(sys.stdin)['output'])"

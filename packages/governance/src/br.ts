@@ -59,8 +59,8 @@ export class BRGovernance implements GovernanceAdapter {
 
       const data = (await res.json()) as { allowed: boolean; reason?: string }
       return data.allowed
-        ? { allowed: true, reason: data.reason }
-        : { allowed: false, reason: data.reason ?? 'Denied by BR governance' }
+        ? { allowed: true as const, ...(data.reason !== undefined && { reason: data.reason }) }
+        : { allowed: false as const, reason: data.reason ?? 'Denied by BR governance' }
     } catch {
       return failDecision
     }

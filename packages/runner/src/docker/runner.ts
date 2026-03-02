@@ -1,14 +1,9 @@
 import { spawn } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
 import type { RunInput, RunResult, RunnerAdapter, StreamChunk } from '@openaios/core'
+import { buildClaudeArgs } from '../claude-code/runner.js'
+import type { ContainerOrchestrator, DockerContainerConfig } from './orchestrator.js'
 
-interface ClaudeCodeRunnerOptions {
-  /** Path to the claude binary. Defaults to 'claude' (searched in PATH). */
-  bin?: string
-}
-
-// Message types emitted by `claude --output-format stream-json --verbose`
+// Mirrors the shape emitted by `claude --output-format stream-json --verbose`
 interface ClaudeStreamMessage {
   type: 'system' | 'assistant' | 'result' | 'user'
   subtype?: string
@@ -19,20 +14,37 @@ interface ClaudeStreamMessage {
   usage?: {
     input_tokens: number
     output_tokens: number
-    cache_read_input_tokens?: number
-    cache_creation_input_tokens?: number
   }
   cost_usd?: number
   session_id?: string
 }
 
-export class ClaudeCodeRunner implements RunnerAdapter {
+export interface DockerRunnerOptions {
+  orchestrator: ContainerOrchestrator
+  agentName: string
+  /** Docker container config (image, memory, cpus) */
+  containerConfig?: DockerContainerConfig
+  /** Path to the claude binary inside the container. Defaults to 'claude'. */
+  bin?: string
+}
+
+/**
+ * RunnerAdapter that executes each turn via `docker exec` into a long-lived container.
+ */
+export class DockerRunner implements RunnerAdapter {
   readonly supportsSessionResume = true
-  readonly mode = 'native' as const
+  readonly mode = 'docker' as const
+
+  private readonly orchestrator: ContainerOrchestrator
+  private readonly agentName: string
+  private readonly containerConfig: DockerContainerConfig
   private readonly bin: string
 
-  constructor(options: ClaudeCodeRunnerOptions = {}) {
-    this.bin = options.bin ?? 'claude'
+  constructor(opts: DockerRunnerOptions) {
+    this.orchestrator = opts.orchestrator
+    this.agentName = opts.agentName
+    this.containerConfig = opts.containerConfig ?? {}
+    this.bin = opts.bin ?? 'claude'
   }
 
   async run(input: RunInput): Promise<RunResult> {
@@ -46,23 +58,22 @@ export class ClaudeCodeRunner implements RunnerAdapter {
       next = await gen.next()
     }
     result = next.value
-
     return result
   }
 
   async *runStreaming(input: RunInput): AsyncGenerator<StreamChunk, RunResult> {
-    await this.ensureWorkspace(input.workspaceDir)
+    await this.orchestrator.ensureRunning(this.agentName, this.containerConfig)
 
-    const args = this.buildArgs(input)
-    const proc = spawn(this.bin, args, {
-      cwd: input.workspaceDir,
+    const claudeArgs = buildClaudeArgs(input)
+    // Execute: docker exec <container> claude <args...>
+    const dockerArgs = ['exec', `openaios-${this.agentName}`, this.bin, ...claudeArgs]
+
+    const proc = spawn('docker', dockerArgs, {
+      shell: false,
       env: {
         ...process.env,
-        // Ensure the claude CLI doesn't prompt for anything
         CLAUDE_CODE_INTERACTIVE: '0',
       },
-      // Do NOT use shell — prevents injection via user message
-      shell: false,
     })
 
     let textBuffer = ''
@@ -74,17 +85,11 @@ export class ClaudeCodeRunner implements RunnerAdapter {
     let stderrOutput = ''
 
     proc.stderr.setEncoding('utf-8')
-    proc.stderr.on('data', (chunk: string) => {
-      stderrOutput += chunk
-    })
-
-    const lineBuffer: string[] = []
-
-    // Collect stdout as lines, parse JSONL
-    proc.stdout.setEncoding('utf-8')
+    proc.stderr.on('data', (chunk: string) => { stderrOutput += chunk })
 
     const parseStream = async function* (): AsyncGenerator<StreamChunk, void> {
       let partial = ''
+      proc.stdout.setEncoding('utf-8')
       for await (const chunk of proc.stdout) {
         partial += chunk as string
         const lines = partial.split('\n')
@@ -92,7 +97,6 @@ export class ClaudeCodeRunner implements RunnerAdapter {
         for (const line of lines) {
           const trimmed = line.trim()
           if (!trimmed) continue
-          lineBuffer.push(trimmed)
           const parsed = safeParseJson(trimmed)
           if (!parsed) continue
 
@@ -136,7 +140,7 @@ export class ClaudeCodeRunner implements RunnerAdapter {
 
     if (exitCode !== 0 && exitCode !== null) {
       throw new Error(
-        `claude exited with code ${exitCode}. stderr: ${stderrOutput.slice(0, 500)}`
+        `docker exec claude exited with code ${exitCode}. stderr: ${stderrOutput.slice(0, 500)}`
       )
     }
 
@@ -155,61 +159,12 @@ export class ClaudeCodeRunner implements RunnerAdapter {
   }
 
   async healthCheck(): Promise<boolean> {
-    return new Promise((resolve) => {
-      const proc = spawn(this.bin, ['--version'], { shell: false })
-      proc.on('close', (code) => resolve(code === 0))
-      proc.on('error', () => resolve(false))
-    })
+    const running = await this.orchestrator.isRunning(this.agentName)
+    if (!running) return false
+
+    const result = await this.orchestrator.exec(this.agentName, ['which', this.bin])
+    return result.exitCode === 0
   }
-
-  private buildArgs(input: RunInput): string[] {
-    return buildClaudeArgs(input)
-  }
-
-  private async ensureWorkspace(dir: string): Promise<void> {
-    if (!existsSync(dir)) {
-      await mkdir(dir, { recursive: true })
-    }
-  }
-}
-
-/**
- * Build the CLI arguments for a claude invocation.
- * Exported so DockerRunner can reuse identical arg-building logic.
- */
-export function buildClaudeArgs(input: RunInput): string[] {
-  const args: string[] = [
-    '--output-format', 'stream-json',
-    '--verbose',
-  ]
-
-  if (input.model && input.model !== 'claude-code') {
-    args.push('--model', input.model)
-  }
-
-  if (input.claudeSessionId) {
-    args.push('--resume', input.claudeSessionId)
-  }
-
-  if (input.systemPrompt) {
-    args.push('--system-prompt', input.systemPrompt)
-  }
-
-  // Build allowedTools list — deny-by-default
-  if (input.allowedTools.length > 0) {
-    args.push('--allowedTools', input.allowedTools.join(','))
-  }
-
-  if (input.deniedTools.length > 0) {
-    args.push('--disallowedTools', input.deniedTools.join(','))
-  }
-
-  // SECURITY: `--` end-of-flags separator before user message.
-  // This prevents any user-supplied content from being interpreted as CLI flags.
-  args.push('--')
-  args.push(input.message)
-
-  return args
 }
 
 function safeParseJson(line: string): unknown | null {

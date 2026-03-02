@@ -31,10 +31,15 @@ agents:
         - WebSearch     # Disable external web access
 
     runner:
-      mode: native      # 'native' or 'docker' (docker coming in a future release)
+      mode: native      # 'native' spawns per-turn; 'docker' uses a long-lived container
       # docker:
-      #   image: node:22-slim
-      #   memory: 512m
+      #   image: openaios/agent:latest   # image with claude CLI + call_agent tool
+      #   memory: 1g                     # container memory limit
+      #   cpus: 1                        # CPU limit
+
+    capabilities:
+      browser: false          # true provisions a Chromium CDP sidecar (docker mode only)
+      agent-calls: []         # list of agent names this agent may call via call_agent
 
   # Example: a second agent on the same Telegram account (different bot token)
   # - name: coder
@@ -87,6 +92,7 @@ budget:
 network:
   bind: tailscale   # 'tailscale' | 'localhost' | '0.0.0.0' | specific IP
   port: 3000        # Used for webhook/web-chat channels
+  # bus_port: 0     # Internal agent bus port (0 = random ephemeral port)
 
 data:
   dir: ./data       # Runtime data directory (sessions, SQLite). Relative to CWD.

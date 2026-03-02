@@ -1,4 +1,7 @@
-export { ClaudeCodeRunner } from './claude-code/runner.js'
+export { ClaudeCodeRunner, buildClaudeArgs } from './claude-code/runner.js'
 export { OllamaRunner } from './ollama/runner.js'
 export { OpenAICompatRunner } from './openai-compat/runner.js'
+export { ContainerOrchestrator, CapabilityProvisioner, DockerRunner } from './docker/index.js'
+export type { DockerContainerConfig, ExecResult, DockerRunnerOptions } from './docker/index.js'
 export { createRunner, resolveProvider } from './factory.js'
+export type { CreateRunnerOptions } from './factory.js'

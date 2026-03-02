@@ -23,9 +23,9 @@ export class TelegramAdapter implements ChannelAdapter {
         messageId: String(ctx.message.message_id),
         source: {
           id: String(ctx.chat.id),
-          threadId: ctx.message.message_thread_id
-            ? String(ctx.message.message_thread_id)
-            : undefined,
+          ...(ctx.message.message_thread_id !== undefined && {
+            threadId: String(ctx.message.message_thread_id),
+          }),
         },
         userId: String(ctx.from?.id ?? ctx.chat.id),
         userName: ctx.from?.username ?? ctx.from?.first_name,
@@ -80,19 +80,15 @@ export class TelegramAdapter implements ChannelAdapter {
 
     try {
       await this.bot.api.sendMessage(chatId, text, {
-        parse_mode: parseMode,
-        reply_parameters: msg.replyToMessageId
-          ? { message_id: Number(msg.replyToMessageId) }
-          : undefined,
-        message_thread_id: target.threadId ? Number(target.threadId) : undefined,
+        ...(parseMode && { parse_mode: parseMode }),
+        ...(msg.replyToMessageId && { reply_parameters: { message_id: Number(msg.replyToMessageId) } }),
+        ...(target.threadId && { message_thread_id: Number(target.threadId) }),
       })
     } catch (err) {
       // Retry without parse_mode if Markdown fails (e.g. malformed output from LLM)
       if (parseMode && err instanceof GrammyError && err.description.includes('parse')) {
         await this.bot.api.sendMessage(chatId, text, {
-          reply_parameters: msg.replyToMessageId
-            ? { message_id: Number(msg.replyToMessageId) }
-            : undefined,
+          ...(msg.replyToMessageId && { reply_parameters: { message_id: Number(msg.replyToMessageId) } }),
         })
       } else {
         throw err
