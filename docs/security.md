@@ -8,6 +8,7 @@ openAIOS runs AI agents that can execute tools on the host system. The primary t
 2. **Privilege escalation** — agent accesses resources outside its intended scope
 3. **Credential exposure** — secrets leak via logs, config files, or agent output
 4. **Budget abuse** — agent consumes unbounded resources (tokens, API costs)
+5. **Unauthorized agent-to-agent calls** — one agent delegates to another it shouldn't reach
 
 ## Security Controls
 
@@ -25,7 +26,7 @@ An empty `allow` list blocks all tools. A wildcard `*` in `allow` permits all (u
 
 ### 2. CLI flag injection prevention
 
-The `ClaudeCodeRunner` uses `spawn()` (not `shell: true`) and always passes `--` before user input:
+The `ClaudeCodeRunner` and `DockerRunner` use `spawn()` (not `shell: true`) and always pass `--` before user input:
 
 ```typescript
 spawn('claude', [...flags, '--', userMessage], { shell: false })
@@ -52,6 +53,8 @@ This ensures user-supplied text can never be interpreted as a CLI flag, regardle
 
 Default binding is `tailscale` — the runtime only listens on the Tailscale interface. No public ports are exposed. The Telegram/Discord bots use outbound polling (not inbound webhooks), so no inbound ports are required for those channels.
 
+The internal agent bus HTTP server binds to `127.0.0.1` only — it is never reachable from outside the host.
+
 Webhooks (if used) should be served behind Tailscale funnel or a reverse proxy.
 
 ### 6. Systemd hardening
@@ -65,14 +68,42 @@ The systemd unit applies:
 - `RestrictRealtime=yes`
 - `RestrictSUIDSGID=yes`
 
-### 7. Budget controls
+### 7. Docker container isolation
+
+In `runner.mode: docker`, each agent runs in its own container with:
+- Memory and CPU hard limits (`--memory`, `--cpus`)
+- No host filesystem mounts (workspace via named Docker volume only)
+- Agent containers share the `openaios` bridge network — not the host network
+
+### 8. Agent bus security
+
+The internal bus HTTP server uses a one-time UUID bearer token generated at startup:
+
+```
+Authorization: Bearer {randomUUID()}
+```
+
+The token is injected into containers via `OPENAIOS_BUS_TOKEN` at `docker run` time. Requests without the correct token return 401. The server only binds to `127.0.0.1`.
+
+Agent-to-agent calls pass two authorization layers:
+
+1. **GovernanceAdapter.checkPolicy** — `call_agent` must be in the calling agent's `permissions.allow` list (auto-added when `capabilities['agent-calls']` is non-empty)
+2. **AgentBus.allowedCallees** — the target agent must be explicitly listed in the caller's `capabilities['agent-calls']`
+
+Both layers must pass. This prevents:
+- Agents calling other agents they were not explicitly given permission to reach
+- Circular call chains from bypassing governance (each hop is independently checked)
+
+### 9. Budget controls
 
 The `BudgetManager` enforces per-agent spending limits. On budget exceeded:
 - `block` — refuse to run the agent
 - `downgrade` — switch to a cheaper local model
 - `warn` — log a warning but continue
 
-### 8. Governance: fail-open vs fail-secure
+Agent-to-agent bus calls are budgeted against the **callee** agent's limit, not the caller's. A runaway delegation chain hits each agent's individual budget ceiling.
+
+### 10. Governance: fail-open vs fail-secure
 
 BRGovernance (if configured) has a configurable failure mode:
 
@@ -93,11 +124,13 @@ LocalGovernance never fails — it's a pure in-process check.
 
 ## Known Limitations
 
-1. **Agent isolation is user-level** — all agents run as the `aios` user. A compromised agent can read files accessible to that user. Docker isolation (future `runner.mode: docker`) will address this.
+1. **Native mode: agent isolation is user-level** — in `runner.mode: native`, all agents run as the `aios` user. A compromised agent can read files accessible to that user. Use `runner.mode: docker` for stronger isolation.
 
 2. **In-memory conversation history** — Ollama and OpenAI-compat runners store conversation history in memory. This is lost on restart and is not protected from other processes running as `aios`.
 
-3. **No rate limiting** — per-user message rate limiting is not yet implemented. A malicious user could send many messages rapidly.
+3. **No per-user rate limiting** — per-user message rate limiting is not yet implemented. A malicious user could send many messages rapidly.
+
+4. **Docker socket access** — docker mode requires the `aios` user to have Docker access (typically via the `docker` group). This is equivalent to root access on the host. Consider using rootless Docker or a Docker socket proxy.
 
 ## Security Checklist
 
@@ -107,8 +140,12 @@ LocalGovernance never fails — it's a pure in-process check.
 - [x] Input validation: agent name regex, session ID regex, 16KB message limit
 - [x] No credentials in config files — env vars only
 - [x] Tailscale bind by default
+- [x] Bus HTTP server bound to 127.0.0.1 only, one-time UUID token
+- [x] Two-layer agent-to-agent authorization (governance + allowedCallees)
+- [x] Docker container memory/CPU limits
+- [x] Budget limits with block/downgrade/warn actions
 - [x] Fail-open governance with explicit opt-in to fail-secure
 - [x] No community extension/skill marketplace
 - [ ] Per-user rate limiting (future)
-- [ ] Docker runner isolation (future)
+- [ ] Rootless Docker / Docker socket proxy (future)
 - [ ] Audit log to file (future)
