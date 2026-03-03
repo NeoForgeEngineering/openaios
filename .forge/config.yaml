@@ -1,0 +1,9 @@
+project: openaios
+version: 2.0.0
+created: '2026-03-03T06:36:19.324656+00:00'
+phases:
+- Focus
+- Orchestrate
+- Refine
+- Generate
+- Evaluate
