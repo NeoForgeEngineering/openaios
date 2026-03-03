@@ -138,9 +138,9 @@ export class DockerRunner implements RunnerAdapter {
       proc.on('close', resolve)
     })
 
-    if (exitCode !== 0 && exitCode !== null) {
+    if (exitCode !== 0) {
       throw new Error(
-        `docker exec claude exited with code ${exitCode}. stderr: ${stderrOutput.slice(0, 500)}`
+        `docker exec claude exited with code ${String(exitCode)}. stderr: ${stderrOutput.slice(0, 500)}`
       )
     }
 

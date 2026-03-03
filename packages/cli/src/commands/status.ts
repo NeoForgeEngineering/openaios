@@ -14,6 +14,10 @@ export async function statusCommand(options: { config?: string }): Promise<void>
   // Runner health checks
   console.log('Runners:')
   for (const agent of config.agents) {
+    if (agent.runner.mode === 'docker') {
+      console.log(`  - ${agent.name} (${agent.model.default}) — docker mode, health check skipped`)
+      continue
+    }
     try {
       const runner = createRunner(agent.model.default, providers, agent.runner)
       const healthy = await runner.healthCheck()

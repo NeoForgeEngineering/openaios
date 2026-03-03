@@ -8,7 +8,7 @@ import { createRunner, ContainerOrchestrator, CapabilityProvisioner } from '@ope
 import { BudgetManager } from '@openaios/budget'
 import { createGovernance } from '@openaios/governance'
 import { RouterCore, SQLiteSessionStore, AgentBus } from '@openaios/router'
-import { TelegramAdapter } from '@openaios/channels'
+import { TelegramAdapter, WebhookAdapter } from '@openaios/channels'
 import type { AgentRoute } from '@openaios/router'
 
 export async function startCommand(options: { config?: string; dataDir?: string }): Promise<void> {
@@ -47,6 +47,20 @@ export async function startCommand(options: { config?: string; dataDir?: string 
 
   // Detect if any agent needs docker mode
   const hasDockerAgents = config.agents.some((a) => a.runner.mode === 'docker')
+
+  // --- Shared HTTP server (webhook channels) ---
+  const httpServer = createServer()
+  const hasWebhookAgents = config.agents.some((a) => a.channels.webhook)
+
+  if (hasWebhookAgents) {
+    await new Promise<void>((resolve, reject) => {
+      httpServer.listen(config.network.port, () => {
+        console.log(`[openaios] HTTP server listening on port ${config.network.port}`)
+        resolve()
+      })
+      httpServer.on('error', reject)
+    })
+  }
 
   // --- Bus HTTP server ---
   const busToken = randomUUID()
@@ -169,6 +183,25 @@ export async function startCommand(options: { config?: string; dataDir?: string 
       console.log(`[openaios] Agent "${agent.name}" → Telegram`)
     }
 
+    if (agent.channels.webhook) {
+      const adapter = new WebhookAdapter({
+        server: httpServer,
+        path: agent.channels.webhook.path,
+        ...(agent.channels.webhook.secret !== undefined && { secret: agent.channels.webhook.secret }),
+      })
+      routes.push({
+        agentName: agent.name,
+        systemPrompt,
+        defaultModel: agent.model.default,
+        ...(agent.model.premium !== undefined && { premiumModel: agent.model.premium }),
+        allowedTools,
+        deniedTools: agent.permissions.deny,
+        runner,
+        channel: adapter,
+      })
+      console.log(`[openaios] Agent "${agent.name}" → Webhook (${agent.channels.webhook.path})`)
+    }
+
     if (!agent.channels.telegram && !agent.channels.discord && !agent.channels.webhook) {
       console.warn(`[openaios] Agent "${agent.name}" has no channels configured — skipping`)
     }
@@ -192,6 +225,7 @@ export async function startCommand(options: { config?: string; dataDir?: string 
     console.log(`\n[openaios] Received ${signal}, shutting down...`)
     await router.stop()
     busServer.close()
+    httpServer.close()
     if (provisioner) await provisioner.deprovisionAll()
     if (orchestrator) await orchestrator.stopAll()
     budget.close()

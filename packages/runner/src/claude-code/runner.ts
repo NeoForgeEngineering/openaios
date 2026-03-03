@@ -78,8 +78,6 @@ export class ClaudeCodeRunner implements RunnerAdapter {
       stderrOutput += chunk
     })
 
-    const lineBuffer: string[] = []
-
     // Collect stdout as lines, parse JSONL
     proc.stdout.setEncoding('utf-8')
 
@@ -92,7 +90,6 @@ export class ClaudeCodeRunner implements RunnerAdapter {
         for (const line of lines) {
           const trimmed = line.trim()
           if (!trimmed) continue
-          lineBuffer.push(trimmed)
           const parsed = safeParseJson(trimmed)
           if (!parsed) continue
 

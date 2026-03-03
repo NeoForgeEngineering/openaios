@@ -205,14 +205,18 @@ describe('AgentBus', () => {
     assert.equal(session.agentName, 'callee')
   })
 
-  // AC8: fromAgent not registered → allowedCallees check skipped, governance still checked
-  test('skips allowedCallees check when fromAgent has no entry', async () => {
-    // caller is NOT registered — no entry, so no allowedCallees to check
+  // AC8: fromAgent not registered → denied (unregistered callers cannot bypass allowedCallees)
+  test('denies call when fromAgent is not registered on the bus', async () => {
+    // caller is NOT registered — no entry means no allowedCallees, so must be denied
     bus.register('callee', makeEntry())
 
-    // Governance allows → should succeed (allowedCallees check is skipped)
-    const runner = bus['agents'].get('callee')!.runner as MockRunner
-    await bus.request(makeRequest())
-    assert.equal((runner as MockRunner).calls.length, 1)
+    await assert.rejects(
+      () => bus.request(makeRequest()),
+      (err: unknown) => {
+        assert.ok(err instanceof AgentCallDeniedError)
+        assert.ok((err as Error).message.includes('allowedCallees'))
+        return true
+      }
+    )
   })
 })

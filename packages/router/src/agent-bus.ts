@@ -80,9 +80,9 @@ export class AgentBus implements AgentBusInterface {
       throw new AgentCallDeniedError(req.fromAgent, req.toAgent, decision.reason)
     }
 
-    // 3. Check allowedCallees as a second layer
+    // 3. Check allowedCallees as a second layer — deny if caller is unknown or not permitted
     const fromEntry = this.agents.get(req.fromAgent)
-    if (fromEntry && !fromEntry.allowedCallees.includes(req.toAgent)) {
+    if (!fromEntry || !fromEntry.allowedCallees.includes(req.toAgent)) {
       throw new AgentCallDeniedError(
         req.fromAgent,
         req.toAgent,

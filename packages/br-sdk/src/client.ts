@@ -83,7 +83,7 @@ export class BRClient {
           Authorization: `Bearer ${this.token}`,
           'User-Agent': 'openaios-br-sdk/0.1.0',
         },
-        body: body !== undefined ? JSON.stringify(body) : undefined,
+        ...(body !== undefined && { body: JSON.stringify(body) }),
         signal: controller.signal,
       })
 

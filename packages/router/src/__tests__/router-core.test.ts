@@ -9,7 +9,7 @@ import type { BudgetManager, BudgetCheckResult } from '@openaios/budget'
 // Minimal BudgetManager mock
 // ---------------------------------------------------------------------------
 function makeMockBudget(override?: Partial<BudgetCheckResult>): BudgetManager {
-  const check: BudgetCheckResult = { allowed: true, effectiveModel: undefined, ...override }
+  const check: BudgetCheckResult = { allowed: true, ...override }
   return {
     check: (_agentName: string, requestedModel: string) =>
       ({ ...check, effectiveModel: check.effectiveModel ?? requestedModel }),
