@@ -87,6 +87,21 @@ When `browser: true`, a `ghcr.io/zenika/alpine-chrome` container is started alon
 
 When `agent-calls: [other-agent]` is set, the `call_agent` tool is automatically added to the agent's allowed tools, and the agent may invoke `call_agent other-agent "message"` from inside the container. Requests are routed through the internal bus HTTP server.
 
+## Channel Notes
+
+### WebhookAdapter
+
+The webhook channel uses a **synchronous request/response** pattern: the HTTP POST is held open until the agent calls `send()`, at which point the response is returned in the HTTP body. This makes `curl` a first-class client for local development without any third-party bot token.
+
+Multiple agents can share the same HTTP server (`config.network.port`) by registering different paths (`/webhook`, `/webhook/agent-b`, etc.). The server is started only if at least one agent has `channels.webhook` configured.
+
+```bash
+# Local test — no Telegram account required
+curl -X POST http://localhost:3000/webhook \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "hello", "userId": "me"}'
+```
+
 ## Message Flow
 
 ### Channel → Agent (normal turn)
@@ -206,12 +221,13 @@ Agent-to-agent bus calls are budgeted separately against the **callee** agent's 
 openaios start
   1. Load config (openAIOS.yml)
   2. Init: SessionStore, BudgetManager, Governance
-  3. Start bus HTTP server (127.0.0.1:{random_port}, one-time token)
-  4. If any docker agents: create ContainerOrchestrator + CapabilityProvisioner
-  5. For each docker agent: ensureRunning() → docker run (if not already up)
-  6. For each docker agent: provision() → start browser sidecar if needed
-  7. For each agent: register on AgentBus
-  8. For each agent channel: create adapter, push AgentRoute
-  9. RouterCore.start() → all channels begin polling/listening
- 10. On SIGINT/SIGTERM: stop channels → close bus → deprovision sidecars → stop containers
+  3. If any webhook agents: start shared HTTP server on config.network.port
+  4. Start bus HTTP server (127.0.0.1:{random_port}, one-time token)
+  5. If any docker agents: create ContainerOrchestrator + CapabilityProvisioner
+  6. For each docker agent: ensureRunning() → docker run (if not already up)
+  7. For each docker agent: provision() → start browser sidecar if needed
+  8. For each agent: register on AgentBus
+  9. For each agent channel: create adapter, push AgentRoute
+ 10. RouterCore.start() → all channels begin polling/listening
+ 11. On SIGINT/SIGTERM: stop channels → close bus/HTTP servers → deprovision sidecars → stop containers
 ```
