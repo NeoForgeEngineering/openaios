@@ -1,0 +1,1760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>openAIOS — AI Agent Orchestration OS</title>
+<style>
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #0d1117;
+  --bg-sidebar:  #0a0e14;
+  --bg-code:     #161b22;
+  --bg-card:     #131920;
+  --border:      #21282f;
+  --text:        #cdd9e5;
+  --text-muted:  #768390;
+  --text-heading:#e6edf3;
+  --accent:      #58a6ff;
+  --accent-dim:  #1f4b77;
+  --green:       #3fb950;
+  --yellow:      #d29922;
+  --purple:      #bc8cff;
+  --orange:      #ffa657;
+  --red:         #f85149;
+  --sidebar-w:   272px;
+  --content-max: 860px;
+  --font-mono: 'SFMono-Regular', 'Cascadia Code', 'Fira Code', Consolas, 'Liberation Mono', Menlo, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+#sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-w);
+  height: 100vh;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  transition: transform 0.25s ease;
+}
+
+#sidebar::-webkit-scrollbar { width: 4px; }
+#sidebar::-webkit-scrollbar-track { background: transparent; }
+#sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.sidebar-logo {
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text-heading);
+  flex-shrink: 0;
+}
+
+.sidebar-logo-mark {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--purple) 100%);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: #fff; letter-spacing: -0.5px;
+  flex-shrink: 0;
+}
+
+.sidebar-logo-text {
+  font-size: 15px; font-weight: 700; letter-spacing: -0.2px;
+}
+.sidebar-logo-version {
+  font-size: 11px; color: var(--text-muted); font-weight: 400;
+}
+
+.toc-nav { padding: 12px 0 24px; flex: 1; }
+
+.toc-group-label {
+  padding: 14px 20px 4px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.8px; color: var(--text-muted);
+}
+
+.toc-item {
+  display: block; padding: 5px 20px;
+  font-size: 13.5px; color: var(--text-muted);
+  text-decoration: none; border-left: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  cursor: pointer;
+}
+
+.toc-item:hover { color: var(--text); background: rgba(88,166,255,0.05); }
+
+.toc-item.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: rgba(88,166,255,0.08);
+}
+
+.toc-item.sub { padding-left: 34px; font-size: 13px; }
+
+/* ── Hamburger ────────────────────────────────────────────────────────────── */
+#hamburger {
+  display: none;
+  position: fixed; top: 12px; left: 12px; z-index: 200;
+  width: 40px; height: 40px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; cursor: pointer;
+  flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+}
+
+#hamburger span {
+  display: block; width: 18px; height: 2px;
+  background: var(--text); border-radius: 1px;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+#sidebar-overlay {
+  display: none; position: fixed; inset: 0; z-index: 99;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);
+}
+
+/* ── Main content ─────────────────────────────────────────────────────────── */
+#main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  min-width: 0;
+}
+
+.content {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 0 40px 80px;
+}
+
+/* ── Sections ─────────────────────────────────────────────────────────────── */
+section {
+  padding-top: 72px;
+}
+
+section:first-of-type { padding-top: 0; }
+
+/* ── Hero ─────────────────────────────────────────────────────────────────── */
+.hero {
+  padding: 64px 0 56px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--accent);
+  background: rgba(88,166,255,0.1);
+  border: 1px solid rgba(88,166,255,0.25);
+  border-radius: 20px; padding: 4px 12px; margin-bottom: 22px;
+}
+
+.hero-title {
+  font-size: 52px; font-weight: 800; letter-spacing: -1.5px;
+  line-height: 1.1; color: var(--text-heading); margin-bottom: 18px;
+}
+
+.hero-title span {
+  background: linear-gradient(90deg, var(--accent), var(--purple));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-tagline {
+  font-size: 18px; color: var(--text-muted);
+  max-width: 600px; margin-bottom: 32px; line-height: 1.6;
+}
+
+.hero-badges {
+  display: flex; flex-wrap: wrap; gap: 10px;
+}
+
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 6px;
+  font-size: 13px; font-weight: 600; letter-spacing: 0.1px;
+}
+
+.badge-blue   { background: rgba(88,166,255,0.12); color: #58a6ff; border: 1px solid rgba(88,166,255,0.3); }
+.badge-green  { background: rgba(63,185,80,0.12);  color: #3fb950; border: 1px solid rgba(63,185,80,0.3); }
+.badge-purple { background: rgba(188,140,255,0.12); color: #bc8cff; border: 1px solid rgba(188,140,255,0.3); }
+.badge-orange { background: rgba(255,166,87,0.12); color: #ffa657; border: 1px solid rgba(255,166,87,0.3); }
+.badge-yellow { background: rgba(210,153,34,0.12); color: #d29922; border: 1px solid rgba(210,153,34,0.3); }
+
+/* ── Typography ───────────────────────────────────────────────────────────── */
+h2 {
+  font-size: 28px; font-weight: 700; color: var(--text-heading);
+  letter-spacing: -0.5px; margin-bottom: 20px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--border);
+}
+
+h3 {
+  font-size: 19px; font-weight: 700; color: var(--text-heading);
+  margin: 32px 0 12px; letter-spacing: -0.2px;
+}
+
+h4 {
+  font-size: 15px; font-weight: 700; color: var(--text-heading);
+  margin: 22px 0 8px; text-transform: uppercase; letter-spacing: 0.4px;
+  font-size: 13px; color: var(--text-muted);
+}
+
+p { margin-bottom: 16px; color: var(--text); }
+
+p:last-child { margin-bottom: 0; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+ul, ol {
+  margin: 12px 0 16px 22px;
+}
+
+ul li, ol li { margin-bottom: 6px; }
+
+strong { color: var(--text-heading); font-weight: 600; }
+
+/* ── Code blocks ──────────────────────────────────────────────────────────── */
+.code-block {
+  position: relative;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 16px 0;
+  overflow: hidden;
+}
+
+.code-block-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.code-block-header .lang-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--text-muted); font-family: var(--font-sans);
+  font-weight: 600;
+}
+
+.copy-btn {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 5px;
+  padding: 3px 10px;
+  font-size: 12px; cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 0.15s, color 0.15s;
+}
+
+.copy-btn:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+.copy-btn.copied { color: var(--green); border-color: rgba(63,185,80,0.4); }
+
+.code-block pre {
+  padding: 16px 18px;
+  overflow-x: auto;
+  margin: 0;
+}
+
+.code-block code {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre;
+  display: block;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: rgba(110,118,129,0.15);
+  border: 1px solid rgba(110,118,129,0.2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--text);
+}
+
+.code-block code { background: none; border: none; padding: 0; }
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; margin: 16px 0; }
+
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: 14px;
+}
+
+th {
+  background: rgba(255,255,255,0.04);
+  padding: 10px 14px;
+  text-align: left; font-weight: 600;
+  color: var(--text-heading);
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+
+td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  color: var(--text);
+}
+
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.02); }
+
+/* ── Cards & callouts ─────────────────────────────────────────────────────── */
+.callout {
+  border-radius: 8px; padding: 14px 18px;
+  margin: 20px 0; font-size: 14px;
+  display: flex; gap: 10px; align-items: flex-start;
+}
+
+.callout-note  { background: rgba(88,166,255,0.08); border: 1px solid rgba(88,166,255,0.25); }
+.callout-warn  { background: rgba(210,153,34,0.08); border: 1px solid rgba(210,153,34,0.25); }
+.callout-tip   { background: rgba(63,185,80,0.08);  border: 1px solid rgba(63,185,80,0.25); }
+.callout-icon  { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+.callout p { margin: 0; }
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px; margin: 20px 0;
+}
+
+.info-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px 18px;
+}
+
+.info-card-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.7px; color: var(--text-muted); margin-bottom: 6px;
+}
+
+.info-card-value {
+  font-size: 14px; color: var(--text-heading); line-height: 1.5;
+}
+
+/* ── ASCII flow ───────────────────────────────────────────────────────────── */
+.ascii-flow {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px 28px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text);
+  overflow-x: auto;
+  margin: 20px 0;
+}
+
+.ascii-flow .step-label {
+  color: var(--accent);
+}
+
+.ascii-flow .step-detail {
+  color: var(--text-muted);
+}
+
+/* ── Checklist ────────────────────────────────────────────────────────────── */
+.checklist { list-style: none; margin: 12px 0; padding: 0; }
+.checklist li {
+  padding: 4px 0 4px 28px; position: relative; font-size: 14px;
+}
+.checklist li::before {
+  position: absolute; left: 0; top: 5px;
+  width: 18px; height: 18px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  content: '\2713';
+  background: rgba(63,185,80,0.15); color: var(--green);
+  border: 1px solid rgba(63,185,80,0.3);
+}
+.checklist li.future::before {
+  content: '\25A1';
+  background: rgba(110,118,129,0.1); color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+/* ── Step list ────────────────────────────────────────────────────────────── */
+.step-list { list-style: none; padding: 0; margin: 16px 0; }
+.step-list li {
+  display: flex; gap: 14px; margin-bottom: 20px; align-items: flex-start;
+}
+.step-num {
+  flex-shrink: 0; width: 28px; height: 28px;
+  background: var(--accent-dim); border: 1px solid var(--accent);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: var(--accent);
+  margin-top: 2px;
+}
+.step-body { flex: 1; }
+.step-body p { margin: 0 0 8px; }
+
+/* ── Section divider ──────────────────────────────────────────────────────── */
+.section-lead {
+  font-size: 17px; color: var(--text-muted);
+  margin-bottom: 28px; max-width: 680px;
+}
+
+/* ── Responsive / mobile ──────────────────────────────────────────────────── */
+@media (max-width: 800px) {
+  #sidebar {
+    transform: translateX(-100%);
+  }
+
+  #sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+
+  #sidebar-overlay.visible { display: block; }
+
+  #hamburger { display: flex; }
+
+  #main { margin-left: 0; }
+
+  .content { padding: 52px 20px 60px; }
+
+  .hero-title { font-size: 34px; }
+  .hero-tagline { font-size: 16px; }
+
+  h2 { font-size: 22px; }
+  h3 { font-size: 17px; }
+}
+
+@media (max-width: 480px) {
+  .hero-title { font-size: 28px; letter-spacing: -0.5px; }
+  .hero-badges { gap: 7px; }
+  .badge { font-size: 12px; padding: 5px 11px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Sidebar overlay (mobile) -->
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- Hamburger button (mobile) -->
+<button id="hamburger" onclick="toggleSidebar()" aria-label="Open navigation">
+  <span></span><span></span><span></span>
+</button>
+
+<!-- ── Sidebar ─────────────────────────────────────────────────────────────── -->
+<nav id="sidebar">
+  <a class="sidebar-logo" href="#hero">
+    <div class="sidebar-logo-mark">AI</div>
+    <div>
+      <div class="sidebar-logo-text">openAIOS</div>
+      <div class="sidebar-logo-version">v0.1 — Agent OS</div>
+    </div>
+  </a>
+
+  <div class="toc-nav">
+    <div class="toc-group-label">Getting Started</div>
+    <a class="toc-item" href="#what-is" onclick="closeSidebar()">What is openAIOS</a>
+    <a class="toc-item" href="#quickstart" onclick="closeSidebar()">Quickstart</a>
+    <a class="toc-item" href="#how-it-works" onclick="closeSidebar()">How It Works</a>
+
+    <div class="toc-group-label">Channels &amp; Runners</div>
+    <a class="toc-item" href="#channels" onclick="closeSidebar()">Channels</a>
+    <a class="toc-item sub" href="#channel-webhook" onclick="closeSidebar()">Webhook</a>
+    <a class="toc-item sub" href="#channel-telegram" onclick="closeSidebar()">Telegram</a>
+    <a class="toc-item" href="#runners" onclick="closeSidebar()">Runner Modes</a>
+    <a class="toc-item sub" href="#runner-native" onclick="closeSidebar()">native</a>
+    <a class="toc-item sub" href="#runner-docker" onclick="closeSidebar()">docker</a>
+    <a class="toc-item sub" href="#runner-ollama" onclick="closeSidebar()">Ollama</a>
+    <a class="toc-item sub" href="#runner-openai" onclick="closeSidebar()">OpenAI-compat</a>
+
+    <div class="toc-group-label">Configuration</div>
+    <a class="toc-item" href="#config" onclick="closeSidebar()">Config Reference</a>
+    <a class="toc-item" href="#agent-bus" onclick="closeSidebar()">Agent Bus</a>
+    <a class="toc-item" href="#capabilities" onclick="closeSidebar()">Capabilities</a>
+    <a class="toc-item" href="#budget-governance" onclick="closeSidebar()">Budget &amp; Governance</a>
+
+    <div class="toc-group-label">Operations</div>
+    <a class="toc-item" href="#security" onclick="closeSidebar()">Security</a>
+    <a class="toc-item" href="#cli" onclick="closeSidebar()">CLI Reference</a>
+    <a class="toc-item" href="#deployment" onclick="closeSidebar()">Deployment</a>
+    <a class="toc-item" href="#packages" onclick="closeSidebar()">Package Structure</a>
+  </div>
+</nav>
+
+<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<main id="main">
+<div class="content">
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Hero -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<div class="hero" id="hero">
+  <div class="hero-eyebrow">Open Source &bull; AGPL-3.0</div>
+  <h1 class="hero-title">open<span>AIOS</span></h1>
+  <p class="hero-tagline">
+    Model-agnostic AI agent orchestration OS. Connect any model to any channel
+    with built-in governance, budget tracking, session management, and a governed inter-agent bus.
+  </p>
+  <div class="hero-badges">
+    <span class="badge badge-blue">Model-agnostic</span>
+    <span class="badge badge-green">Deny-by-default</span>
+    <span class="badge badge-orange">Docker isolation</span>
+    <span class="badge badge-purple">Agent bus</span>
+    <span class="badge badge-yellow">Budget controls</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- What is openAIOS -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="what-is">
+  <h2>What is openAIOS</h2>
+  <p class="section-lead">
+    An operating system layer for AI agents — not a framework you code in, but a runtime you configure.
+  </p>
+
+  <p>
+    openAIOS is a model-agnostic AI agent orchestration OS. It connects messaging channels (Telegram,
+    Discord, Webhook) to AI runners (Claude Code, Ollama, OpenAI-compatible APIs) through a typed
+    interface layer. You describe agents in a YAML config file; openAIOS handles all the plumbing:
+    message routing, session continuity, governance checks, budget enforcement, and inter-agent
+    communication.
+  </p>
+
+  <p>
+    Every agent operates under a <strong>deny-by-default</strong> permission model — the agent can
+    only use the tools you explicitly allow. Budget limits cap spending per period and can
+    automatically downgrade the model or block execution when limits are hit. The internal agent bus
+    lets agents call other agents, with both layers (governance policy and callee allowlist) required
+    to pass before a cross-agent call goes through.
+  </p>
+
+  <p>
+    In Docker mode, each agent runs in its own long-lived container with configurable memory and CPU
+    limits, an isolated workspace volume, and optional capability sidecars (Chromium for browser
+    automation). Turns are dispatched via <code>docker exec</code>, so there is no per-turn container
+    startup overhead while the agent still enjoys strong OS-level isolation from the host and other
+    agents.
+  </p>
+
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="info-card-label">Channels</div>
+      <div class="info-card-value">Telegram, Discord (stub), Webhook HTTP</div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-label">Runners</div>
+      <div class="info-card-value">Claude Code CLI, Ollama, OpenAI-compat, Docker</div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-label">Governance</div>
+      <div class="info-card-value">LocalGovernance (in-process) or BRGovernance (external API)</div>
+    </div>
+    <div class="info-card">
+      <div class="info-card-label">Budget</div>
+      <div class="info-card-value">SQLite-backed, per-agent, daily / weekly / monthly periods</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Quickstart -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="quickstart">
+  <h2>Quickstart</h2>
+  <p class="section-lead">Local dev with Ollama — no Telegram token, no cloud account required.</p>
+
+  <p><strong>Prerequisites:</strong> Node.js 22+, pnpm, Ollama running locally with a model pulled.</p>
+
+  <ol class="step-list">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <p><strong>Clone and build</strong></p>
+        <div class="code-block">
+          <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><code>git clone https://github.com/NeoForgeEngineering/openaios
+cd openaios
+pnpm install && pnpm build</code></pre>
+        </div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <p><strong>Create <code>openAIOS.yml</code></strong> — an Ollama-backed agent on the webhook channel</p>
+        <div class="code-block">
+          <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><code>agents:
+  - name: assistant
+    persona: "You are a helpful assistant. Be concise and accurate."
+    model:
+      default: ollama/qwen2.5-coder:7b
+    channels:
+      webhook:
+        path: /webhook
+    permissions:
+      allow: [Read, Glob, Grep]
+      deny: []
+    runner:
+      mode: native
+    capabilities:
+      browser: false
+      agent-calls: []
+
+models:
+  providers:
+    ollama:
+      base_url: "http://localhost:11434"
+
+network:
+  bind: localhost
+  port: 3000
+
+data:
+  dir: ./data</code></pre>
+        </div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <p><strong>Start the runtime</strong></p>
+        <div class="code-block">
+          <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><code>node packages/cli/dist/bin/openaios.js start</code></pre>
+        </div>
+        <p>Expected output:</p>
+        <div class="code-block">
+          <div class="code-block-header"><span class="lang-label">log</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><code>[openaios] Config loaded — 1 agent(s)
+[openaios] Webhook server listening on http://localhost:3000
+[openaios] Agent "assistant" ready (native, ollama/qwen2.5-coder:7b)
+[openaios] RouterCore started</code></pre>
+        </div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <p><strong>Send a test message</strong></p>
+        <div class="code-block">
+          <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><code>curl -s -X POST http://localhost:3000/webhook \
+  -H 'Content-Type: application/json' \
+  -d '{"text": "What is 2 + 2?", "userId": "me"}'</code></pre>
+        </div>
+        <p>Response:</p>
+        <div class="code-block">
+          <div class="code-block-header"><span class="lang-label">json</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><code>{"output":"4","messageId":"msg_01ab..."}</code></pre>
+        </div>
+      </div>
+    </li>
+  </ol>
+
+  <div class="callout callout-note">
+    <div class="callout-icon">i</div>
+    <div>
+      <p><strong>Native module note:</strong> <code>better-sqlite3</code> is a native addon. If you see a binding error on a new Node version, rebuild it:</p>
+      <div class="code-block" style="margin-top:10px">
+        <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre><code>cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 \
+  && npx node-gyp rebuild</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- How it works -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="how-it-works">
+  <h2>How It Works</h2>
+  <p class="section-lead">
+    Every inbound message travels through a fixed pipeline: channel adapter → RouterCore → runner → channel adapter.
+  </p>
+
+  <h3>Normal turn flow</h3>
+  <div class="ascii-flow"><span class="step-label">Telegram / Discord / Webhook</span>
+        ↓ InboundMessage
+  <span class="step-label">ChannelAdapter.onMessage()</span>
+        ↓
+  <span class="step-label">RouterCore</span>
+  <span class="step-detail">  ├── SessionStore.get()          → load session (claudeSessionId for --resume)</span>
+  <span class="step-detail">  ├── BudgetManager.check()       → may downgrade model or block turn</span>
+  <span class="step-label">  ├── RunnerAdapter.run()         → execute turn (spawn claude / docker exec / HTTP)</span>
+  <span class="step-detail">  │    └── (docker) docker exec openaios-{name} claude [args...]</span>
+  <span class="step-detail">  ├── SessionStore.set()          → persist updated session</span>
+  <span class="step-detail">  ├── BudgetManager.record()      → record cost</span>
+  <span class="step-detail">  └── GovernanceAdapter.report()  → fire-and-forget audit (BRGovernance)</span>
+        ↓ RunResult.output
+  <span class="step-label">ChannelAdapter.send()</span>
+        ↓
+  <span class="step-label">Telegram / Discord / Webhook response</span></div>
+
+  <h3>Agent-to-agent bus call</h3>
+  <div class="ascii-flow"><span class="step-label">call_agent script</span> (inside container)
+        ↓ POST /internal/bus/message
+        ↓ Authorization: Bearer {one-time UUID token}
+  <span class="step-label">BusHttpServer</span> (127.0.0.1:{random_port})
+        ↓
+  <span class="step-label">AgentBus.request()</span>
+  <span class="step-detail">  ├── GovernanceAdapter.checkPolicy(tool: 'call_agent')</span>
+  <span class="step-detail">  ├── allowedCallees check  → callee in capabilities['agent-calls']?</span>
+  <span class="step-detail">  ├── BudgetManager.check(toAgent)</span>
+  <span class="step-detail">  ├── SessionStore.get(toAgent, callerSession)</span>
+  <span class="step-label">  ├── RunnerAdapter.run(toAgent)</span>
+  <span class="step-detail">  ├── SessionStore.set()</span>
+  <span class="step-detail">  └── BudgetManager.record(toAgent)</span>
+        ↓ AgentBusResponse { output }
+  <span class="step-detail">call_agent prints output to stdout</span></div>
+
+  <h3>Sessions</h3>
+  <p>
+    The <code>SessionStore</code> persists the <code>claudeSessionId</code> returned by each Claude Code
+    turn and passes it back via <code>--resume</code> on the next turn. In Docker mode, the
+    long-lived container retains conversation history in-process across turns without needing
+    <code>--resume</code>, but the session ID is still tracked for compatibility.
+    Ollama and OpenAI-compatible runners maintain conversation history in-memory (keyed by session key),
+    which is lost on restart.
+  </p>
+
+  <h3>Startup sequence</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">log</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>openaios start
+  1.  Load config (openAIOS.yml, resolve ${ENV_VAR} references)
+  2.  Init: SessionStore, BudgetManager, Governance
+  3.  If any webhook agents → start shared HTTP server on network.port
+  4.  Start bus HTTP server (127.0.0.1:{random_port}, one-time token)
+  5.  If any docker agents → create ContainerOrchestrator + CapabilityProvisioner
+  6.  For each docker agent → ensureRunning() (docker run if not already up)
+  7.  For each docker agent → provision() (start browser sidecar if needed)
+  8.  For each agent → register on AgentBus
+  9.  For each agent channel → create adapter, push AgentRoute
+ 10.  RouterCore.start() → all channels begin polling/listening
+ 11.  On SIGINT/SIGTERM → stop channels → close servers → deprovision → stop containers</code></pre>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Channels -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="channels">
+  <h2>Channels</h2>
+  <p class="section-lead">Channels are the ingress/egress points for agent messages.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Channel</th><th>Config key</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Webhook (HTTP POST)</td><td><code>channels.webhook</code></td><td><span class="badge badge-green" style="font-size:12px;padding:3px 9px">Implemented</span></td></tr>
+        <tr><td>Telegram</td><td><code>channels.telegram</code></td><td><span class="badge badge-green" style="font-size:12px;padding:3px 9px">Implemented</span></td></tr>
+        <tr><td>Discord</td><td><code>channels.discord</code></td><td><span class="badge badge-yellow" style="font-size:12px;padding:3px 9px">Coming soon</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="channel-webhook">Webhook</h3>
+  <p>
+    The webhook channel uses a <strong>synchronous request/response</strong> pattern: the HTTP POST
+    is held open until the agent finishes, then the response is returned in the HTTP body. This makes
+    <code>curl</code> a first-class local dev client — no Telegram account required.
+  </p>
+  <p>
+    Multiple agents can share the same HTTP server by registering different paths. The server starts
+    only if at least one agent has <code>channels.webhook</code> configured.
+  </p>
+
+  <h4>Request</h4>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>curl -X POST http://localhost:{port}{path} \
+  -H 'Content-Type: application/json' \
+  [-H 'X-Webhook-Secret: {secret}'] \
+  -d '{"text": "...", "userId": "optional", "messageId": "optional"}'</code></pre>
+  </div>
+
+  <h4>Response</h4>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">json</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>{"output": "...", "messageId": "..."}</code></pre>
+  </div>
+
+  <h4>Config</h4>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>channels:
+  webhook:
+    path: /webhook          # URL path for this agent
+    secret: ${WEBHOOK_SECRET}  # Optional — validated via X-Webhook-Secret header</code></pre>
+  </div>
+
+  <p>
+    <strong>Multi-agent path routing:</strong> give each agent a distinct path
+    (<code>/webhook/assistant</code>, <code>/webhook/coder</code>) and they all share port 3000.
+  </p>
+
+  <h3 id="channel-telegram">Telegram</h3>
+  <p>
+    The Telegram adapter uses outbound long-polling — no inbound ports are required. Obtain a bot
+    token from <a href="https://t.me/BotFather" target="_blank">@BotFather</a> and set it in
+    your environment:
+  </p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>channels:
+  telegram:
+    token: ${TELEGRAM_TOKEN}   # From @BotFather</code></pre>
+  </div>
+
+  <div class="callout callout-tip">
+    <div class="callout-icon">&#10003;</div>
+    <div><p>Because Telegram uses polling (not inbound webhooks), agents on Tailscale-only networks receive messages without any port-forwarding or public IP.</p></div>
+  </div>
+
+  <h3>Discord <span class="badge badge-yellow" style="font-size:12px;padding:3px 10px;vertical-align:middle">Coming soon</span></h3>
+  <p>
+    The Discord adapter is stubbed. A bot token and guild ID will be required. The config key is
+    <code>channels.discord.token</code> / <code>channels.discord.guildId</code>.
+  </p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Runner Modes -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="runners">
+  <h2>Runner Modes</h2>
+  <p class="section-lead">
+    The runner is selected by the <code>runner.mode</code> field and/or the model name prefix.
+  </p>
+
+  <h3 id="runner-native">native</h3>
+  <p>
+    Spawns a new process per turn directly on the host using the <code>claude</code> CLI.
+    Requires Claude Code CLI in <code>PATH</code> (or set <code>models.providers.claude-code.bin</code>).
+    Suitable for development and single-agent deployments where container overhead is not desired.
+  </p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>runner:
+  mode: native</code></pre>
+  </div>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">log</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>openaios daemon
+  └── spawn('claude', [...flags, '--', userMessage])  ← per turn</code></pre>
+  </div>
+
+  <div class="callout callout-warn">
+    <div class="callout-icon">!</div>
+    <div><p><strong>Isolation note:</strong> In native mode, all agents run as the same OS user. A compromised agent can read any file accessible to that user. Use Docker mode for stronger isolation.</p></div>
+  </div>
+
+  <h3 id="runner-docker">docker</h3>
+  <p>
+    Each agent gets a <strong>long-lived container</strong> (<code>openaios-{name}</code>) started once
+    at startup. Turns execute via <code>docker exec</code> — persistent workspace via a named volume,
+    configurable memory and CPU limits, no per-turn container startup cost.
+  </p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>runner:
+  mode: docker
+  docker:
+    image: openaios/agent:latest   # image with claude CLI + call_agent tool
+    memory: 1g                     # container memory limit
+    cpus: 1                        # CPU limit</code></pre>
+  </div>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">log</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>openaios daemon
+  ├── ContainerOrchestrator
+  │    └── docker run tail -f /dev/null   ← started once at startup
+  └── per turn: docker exec openaios-{name} claude [args...]</code></pre>
+  </div>
+
+  <p><strong>Container naming:</strong></p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Resource</th><th>Name</th></tr></thead>
+      <tbody>
+        <tr><td>Agent container</td><td><code>openaios-{agentName}</code></td></tr>
+        <tr><td>Browser sidecar</td><td><code>openaios-{agentName}-browser</code></td></tr>
+        <tr><td>Docker network</td><td><code>openaios</code> (bridge, created idempotently)</td></tr>
+        <tr><td>Workspace volume</td><td><code>openaios-{agentName}-workspace</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 id="runner-ollama">Ollama</h3>
+  <p>
+    Prefix the model name with <code>ollama/</code> to route through the Ollama local API.
+    Configure the base URL under <code>models.providers.ollama</code>.
+  </p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>model:
+  default: ollama/qwen2.5-coder:7b   # prefix selects Ollama runner
+
+models:
+  providers:
+    ollama:
+      base_url: "http://localhost:11434"</code></pre>
+  </div>
+  <p>
+    Conversation history is maintained in-memory per session. It is lost on process restart.
+    No API key is required for local Ollama.
+  </p>
+
+  <h3 id="runner-openai">OpenAI-compatible</h3>
+  <p>
+    Prefix the model with <code>openai/</code> to route through any OpenAI-compatible API endpoint.
+    Works with Groq, Together, OpenRouter, local vLLM/llama.cpp servers, and the official OpenAI API.
+  </p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>model:
+  default: openai/gpt-4o-mini
+
+models:
+  providers:
+    openai:
+      api_key: ${OPENAI_API_KEY}
+      base_url: "https://api.openai.com/v1"  # optional override
+
+    openrouter:
+      api_key: ${OPENROUTER_API_KEY}
+      base_url: "https://openrouter.ai/api/v1"</code></pre>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Model prefix</th><th>Runner</th></tr></thead>
+      <tbody>
+        <tr><td><code>claude-code</code></td><td>Claude Code CLI (local, native mode)</td></tr>
+        <tr><td><code>ollama/...</code></td><td>Ollama local API</td></tr>
+        <tr><td><code>openai/...</code></td><td>OpenAI-compatible API endpoint</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Configuration Reference -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="config">
+  <h2>Configuration Reference</h2>
+  <p class="section-lead">
+    All configuration lives in <code>openAIOS.yml</code>. Use <code>${ENV_VAR}</code> references
+    for secrets — never inline credentials.
+  </p>
+
+  <h3>agents</h3>
+  <p>An array of agent definitions. At least one agent is required.</p>
+
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>agents:
+  - name: assistant               # Lowercase alphanumeric + hyphens (required)
+    persona: "You are a helpful assistant."  # Inline persona or path to CLAUDE.md
+    model:
+      default: ollama/qwen2.5:7b  # Required — model for most requests
+      premium: claude-code        # Optional — escalated model (future feature)
+    channels:
+      telegram:
+        token: ${TELEGRAM_TOKEN}
+      webhook:
+        path: /webhook
+        secret: ${WEBHOOK_SECRET} # Optional — X-Webhook-Secret header
+    permissions:
+      allow: [Read, Write, Glob, Grep]  # Explicit allowlist — deny-by-default
+      deny: [Bash, WebSearch]           # Takes precedence over allow
+    runner:
+      mode: native   # 'native' | 'docker'
+      docker:        # Only if mode: docker
+        image: openaios/agent:latest
+        memory: 1g
+        cpus: 1
+    capabilities:
+      browser: false        # true → Chromium CDP sidecar (docker mode only)
+      agent-calls: []       # Agents this agent may call via call_agent</code></pre>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>name</code></td><td>string</td><td>—</td><td>Agent identifier. Pattern: <code>/^[a-z0-9-]+$/</code></td></tr>
+        <tr><td><code>persona</code></td><td>string</td><td><code>"You are a helpful assistant."</code></td><td>System prompt. Inline string or file path.</td></tr>
+        <tr><td><code>model.default</code></td><td>string</td><td>—</td><td>Model name with optional prefix (<code>ollama/</code>, <code>openai/</code>).</td></tr>
+        <tr><td><code>model.premium</code></td><td>string</td><td>—</td><td>Escalated model (reserved for future use).</td></tr>
+        <tr><td><code>permissions.allow</code></td><td>string[]</td><td><code>[]</code></td><td>Tool allowlist. Empty = no tools permitted.</td></tr>
+        <tr><td><code>permissions.deny</code></td><td>string[]</td><td><code>[]</code></td><td>Explicit deny list. Takes precedence over allow.</td></tr>
+        <tr><td><code>runner.mode</code></td><td>enum</td><td><code>native</code></td><td><code>native</code> or <code>docker</code>.</td></tr>
+        <tr><td><code>runner.docker.image</code></td><td>string</td><td><code>node:22-slim</code></td><td>Docker image to use.</td></tr>
+        <tr><td><code>runner.docker.memory</code></td><td>string</td><td>—</td><td>Memory limit, e.g. <code>"1g"</code>, <code>"512m"</code>.</td></tr>
+        <tr><td><code>runner.docker.cpus</code></td><td>number</td><td>—</td><td>CPU limit, e.g. <code>1</code>.</td></tr>
+        <tr><td><code>capabilities.browser</code></td><td>boolean</td><td><code>false</code></td><td>Provision Chromium CDP sidecar.</td></tr>
+        <tr><td><code>capabilities.agent-calls</code></td><td>string[]</td><td><code>[]</code></td><td>Agents this agent may call via bus.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>models.providers</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>models:
+  providers:
+    ollama:
+      base_url: "http://localhost:11434"   # Default — no auth required
+
+    claude-code:
+      bin: claude     # Path to claude CLI binary (default: searches PATH)
+
+    anthropic:
+      api_key: ${ANTHROPIC_API_KEY}
+
+    groq:
+      api_key: ${GROQ_API_KEY}
+
+    openrouter:
+      api_key: ${OPENROUTER_API_KEY}
+
+    openai:
+      api_key: ${OPENAI_API_KEY}
+      base_url: "https://api.openai.com/v1"   # Optional override</code></pre>
+  </div>
+
+  <h3>budget</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>budget:
+  period: monthly          # daily | weekly | monthly
+  agents:
+    assistant:
+      limit: 10.00         # USD per period
+      warning_at: 0.80     # Warn at 80% of limit (0.0–1.0)
+      on_exceeded: downgrade  # block | downgrade | warn
+      downgrade_to: ollama/qwen2.5:7b   # Required when on_exceeded: downgrade</code></pre>
+  </div>
+
+  <h3>governance</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>governance:
+  br:                       # Optional — omit for standalone LocalGovernance
+    url: ${BR_URL}
+    token: ${BR_TOKEN}
+    fail_secure: false      # true = block if BR unreachable; false = allow (default)</code></pre>
+  </div>
+
+  <h3>network</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>network:
+  bind: tailscale   # 'tailscale' (default) | 'localhost' | '0.0.0.0' | specific IP
+  port: 3000        # HTTP port for webhook/web-chat channels
+  bus_port: 0       # Internal agent bus port (0 = random ephemeral port)</code></pre>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Value</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td><code>tailscale</code></td><td>Resolves the Tailscale interface IP. Recommended for production.</td></tr>
+        <tr><td><code>localhost</code></td><td>Binds to <code>127.0.0.1</code>. Local dev only.</td></tr>
+        <tr><td><code>0.0.0.0</code></td><td>All interfaces. Use only behind a firewall/reverse proxy.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>data</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>data:
+  dir: ./data   # Runtime data directory (sessions, SQLite). Relative to CWD.</code></pre>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Agent Bus -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="agent-bus">
+  <h2>Agent Bus</h2>
+  <p class="section-lead">
+    Governed request/response between agents — Agent A calls Agent B within enforced policy bounds.
+  </p>
+
+  <p>
+    The agent bus is an internal HTTP server (<code>127.0.0.1:{random_port}</code>) that routes
+    cross-agent calls. Inside a Docker container, agents invoke the <code>call_agent</code> bash
+    script, which POSTs to the bus endpoint. The bus applies two independent authorization layers
+    before dispatching the call to the target agent's runner.
+  </p>
+
+  <h3>Two-layer authorization</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Layer</th><th>Check</th><th>Where</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Layer 1</strong></td>
+          <td><code>GovernanceAdapter.checkPolicy({ tool: 'call_agent' })</code> — <code>call_agent</code> must be in the calling agent's <code>permissions.allow</code> list (auto-added when <code>capabilities['agent-calls']</code> is non-empty)</td>
+          <td>AgentBus</td>
+        </tr>
+        <tr>
+          <td><strong>Layer 2</strong></td>
+          <td>The target agent must be listed in the caller's <code>capabilities['agent-calls']</code> (allowedCallees check)</td>
+          <td>AgentBus</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Both layers must pass. This prevents agents calling peers they were not explicitly given permission to reach, and prevents circular delegation chains from bypassing governance (each hop is independently checked).</p>
+
+  <h3>Example: Agent A calls Agent B</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>agents:
+  - name: orchestrator
+    persona: "You are a planning agent. Delegate coding tasks to the coder agent."
+    model:
+      default: ollama/qwen2.5:7b
+    channels:
+      webhook:
+        path: /webhook
+    permissions:
+      allow: [Read, Glob]  # call_agent is auto-added because agent-calls is non-empty
+    runner:
+      mode: docker
+      docker:
+        image: openaios/agent:latest
+    capabilities:
+      browser: false
+      agent-calls: [coder]   # orchestrator may call coder
+
+  - name: coder
+    persona: "You are an expert software engineer."
+    model:
+      default: claude-code
+    channels: {}             # No channel — only reachable via bus
+    permissions:
+      allow: [Read, Write, Bash, Glob, Grep]
+    runner:
+      mode: docker
+      docker:
+        image: openaios/agent:latest
+    capabilities:
+      browser: false
+      agent-calls: []        # coder cannot call anyone</code></pre>
+  </div>
+
+  <h3>Bus HTTP server</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Property</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr><td>Bind address</td><td><code>127.0.0.1</code> (loopback only, never public)</td></tr>
+        <tr><td>Port</td><td>Random ephemeral (<code>bus_port: 0</code>) or configured</td></tr>
+        <tr><td>Endpoint</td><td><code>POST /internal/bus/message</code></td></tr>
+        <tr><td>Auth</td><td><code>Authorization: Bearer {randomUUID()}</code> — one-time token generated at startup</td></tr>
+        <tr><td>Token delivery</td><td>Injected into containers via <code>OPENAIOS_BUS_TOKEN</code> env var at <code>docker run</code> time</td></tr>
+        <tr><td>URL delivery</td><td>Injected via <code>OPENAIOS_BUS_URL</code> env var</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>call_agent usage (inside container)</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code># The call_agent tool is available in the PATH inside openaios/agent:latest
+call_agent coder "Implement a binary search function in Python with tests"
+
+# Returns the agent's response on stdout
+# Exit code non-zero if the bus call fails or is rejected</code></pre>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Capabilities -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="capabilities">
+  <h2>Capabilities</h2>
+  <p class="section-lead">
+    Capabilities are optional features provisioned as sidecars or injected environment at startup.
+    They require Docker mode unless noted.
+  </p>
+
+  <h3>browser</h3>
+  <p>
+    When <code>capabilities.browser: true</code>, a <code>ghcr.io/zenika/alpine-chrome</code>
+    container is started alongside the agent container on the <code>openaios</code> Docker bridge
+    network. The Chrome DevTools Protocol (CDP) endpoint is injected into the agent's environment:
+  </p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code># /workspace/.env.capabilities inside the agent container:
+CDP_URL=http://openaios-{agentName}-browser:9222</code></pre>
+  </div>
+  <p>
+    The agent can use the CDP URL to drive Chromium for web scraping, testing, or browser automation.
+    Container name: <code>openaios-{agentName}-browser</code>. Reachable by DNS within the
+    <code>openaios</code> network.
+  </p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>capabilities:
+  browser: true    # Requires runner.mode: docker</code></pre>
+  </div>
+
+  <h3>agent-calls</h3>
+  <p>
+    Listing agents in <code>capabilities.agent-calls</code> does two things automatically:
+  </p>
+  <ol>
+    <li>Adds <code>call_agent</code> to the agent's effective <code>permissions.allow</code> list (no manual entry needed)</li>
+    <li>Registers the listed agents as the <code>allowedCallees</code> in the bus — calls to unlisted agents are rejected at the bus layer</li>
+  </ol>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>capabilities:
+  agent-calls: [coder, researcher]   # This agent may call 'coder' and 'researcher'</code></pre>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Budget & Governance -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="budget-governance">
+  <h2>Budget &amp; Governance</h2>
+
+  <h3>BudgetManager</h3>
+  <p>
+    The <code>BudgetManager</code> is backed by SQLite and records cost per agent per period.
+    Before each turn, <code>budget.check()</code> is called. After each turn,
+    <code>budget.record()</code> persists the cost. Agent-to-agent bus calls are budgeted against
+    the <strong>callee</strong> agent's limit, not the caller's.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>on_exceeded value</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td><code>block</code></td><td>Refuse to run the agent until the period resets.</td></tr>
+        <tr><td><code>downgrade</code></td><td>Switch to <code>downgrade_to</code> model for the rest of the period.</td></tr>
+        <tr><td><code>warn</code></td><td>Log a warning but continue running. No enforcement.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>budget:
+  period: monthly
+  agents:
+    assistant:
+      limit: 10.00           # $10 USD per month
+      warning_at: 0.80       # Warn at $8.00
+      on_exceeded: downgrade
+      downgrade_to: ollama/qwen2.5:7b
+
+    power-agent:
+      limit: 50.00
+      warning_at: 0.90
+      on_exceeded: block</code></pre>
+  </div>
+
+  <h3>LocalGovernance</h3>
+  <p>
+    LocalGovernance is an in-process policy engine. It checks each tool call against the agent's
+    <code>permissions.allow</code> and <code>permissions.deny</code> lists. The decision is
+    deterministic and never fails — no network dependency.
+  </p>
+  <ul>
+    <li>Empty <code>allow</code> list → all tools blocked</li>
+    <li><code>*</code> in <code>allow</code> → all tools permitted (use with caution)</li>
+    <li><code>deny</code> list → takes precedence over <code>allow</code></li>
+  </ul>
+
+  <h3>BRGovernance</h3>
+  <p>
+    BRGovernance calls an external policy API (the Bot Resources service) for each tool-use event.
+    It can be configured to <strong>fail-open</strong> (allow if the API is unreachable, the default)
+    or <strong>fail-secure</strong> (block if unreachable).
+  </p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>governance:
+  br:
+    url: ${BR_URL}
+    token: ${BR_TOKEN}
+    fail_secure: false   # false = allow on API timeout (default)
+                         # true  = block on API timeout (strict mode)</code></pre>
+  </div>
+  <p>
+    LocalGovernance is always active. BRGovernance is an additional layer — both must permit the
+    action for it to proceed.
+  </p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Security -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="security">
+  <h2>Security</h2>
+  <p class="section-lead">
+    openAIOS is designed around the assumption that AI agent output is untrusted and that agents
+    must not be able to escalate beyond their declared capabilities.
+  </p>
+
+  <h3>Threat model</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Threat</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Prompt injection</td><td>Deny-by-default tools; <code>--</code> separator prevents flag injection; input validation</td></tr>
+        <tr><td>Privilege escalation</td><td>Docker isolation; no host FS mounts; memory/CPU limits</td></tr>
+        <tr><td>Credential exposure</td><td>Env var references only in config; <code>.env</code> chmod 600; systemd EnvironmentFile</td></tr>
+        <tr><td>Budget abuse</td><td>Per-agent spending limits with block/downgrade/warn enforcement</td></tr>
+        <tr><td>Unauthorized agent calls</td><td>Two-layer auth (governance policy + allowedCallees)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Key controls</h3>
+
+  <h4>1. Deny-by-default permissions</h4>
+  <p>No tools are allowed unless explicitly listed. An empty <code>allow</code> list blocks everything.</p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>permissions:
+  allow: [Read, Glob]  # Only these two tools are allowed
+  deny: [Bash]         # Explicit deny — overrides allow</code></pre>
+  </div>
+
+  <h4>2. CLI flag injection prevention</h4>
+  <p>
+    Both <code>ClaudeCodeRunner</code> and <code>DockerRunner</code> use <code>spawn()</code>
+    (not <code>shell: true</code>) and always pass <code>--</code> before user input, so
+    user-supplied text can never be interpreted as a CLI flag.
+  </p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">typescript</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>spawn('claude', [...flags, '--', userMessage], { shell: false })</code></pre>
+  </div>
+
+  <h4>3. Input validation</h4>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Input</th><th>Validation</th></tr></thead>
+      <tbody>
+        <tr><td>Agent name</td><td><code>/^[a-z0-9-]+$/</code></td></tr>
+        <tr><td>User / session ID</td><td><code>/^[a-zA-Z0-9:_-]+$/</code></td></tr>
+        <tr><td>Message size</td><td>≤ 16KB</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h4>4. Tailscale-first networking</h4>
+  <p>
+    Default <code>network.bind: tailscale</code> — the runtime listens only on the Tailscale
+    interface. No public ports exposed. Telegram/Discord use outbound polling only.
+    The bus HTTP server binds to <code>127.0.0.1</code> exclusively.
+  </p>
+
+  <h4>5. Docker isolation</h4>
+  <p>
+    In Docker mode: configurable memory/CPU hard limits, no host filesystem mounts (workspace via
+    named Docker volume only), containers on the <code>openaios</code> bridge — not the host network.
+  </p>
+
+  <h4>6. Bus token auth</h4>
+  <p>
+    A one-time UUID bearer token is generated at startup and injected into containers via
+    <code>OPENAIOS_BUS_TOKEN</code>. Requests without the correct token return 401.
+  </p>
+
+  <h4>7. Systemd hardening</h4>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">ini</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes</code></pre>
+  </div>
+
+  <h3>Security checklist</h3>
+  <ul class="checklist">
+    <li>Deny-by-default permissions in config schema</li>
+    <li><code>--</code> end-of-flags separator before all user input to claude CLI</li>
+    <li>Input validation: agent name regex, session ID regex, 16KB message limit</li>
+    <li>No credentials in config files — env vars only</li>
+    <li>Tailscale bind by default</li>
+    <li>Bus HTTP server bound to 127.0.0.1, one-time UUID token</li>
+    <li>Two-layer agent-to-agent authorization (governance + allowedCallees)</li>
+    <li>Docker container memory/CPU limits</li>
+    <li>Budget limits with block/downgrade/warn enforcement</li>
+    <li>Fail-open governance with explicit opt-in to fail-secure</li>
+    <li class="future">Per-user rate limiting (future)</li>
+    <li class="future">Rootless Docker / Docker socket proxy (future)</li>
+    <li class="future">Audit log to file (future)</li>
+  </ul>
+
+  <h3>Known limitations</h3>
+  <ul>
+    <li><strong>Native mode:</strong> agent isolation is user-level — all agents run as the <code>aios</code> user. Use Docker mode for stronger isolation.</li>
+    <li><strong>In-memory history:</strong> Ollama and OpenAI-compat runners store conversation history in memory, lost on restart.</li>
+    <li><strong>No per-user rate limiting</strong> — a malicious user could send many messages rapidly.</li>
+    <li><strong>Docker socket access</strong> — Docker mode requires the <code>aios</code> user to be in the <code>docker</code> group, which is equivalent to root access. Consider rootless Docker.</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- CLI Reference -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="cli">
+  <h2>CLI Reference</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>openaios start</code></td><td>Start the runtime. Reads <code>openAIOS.yml</code> in CWD.</td></tr>
+        <tr><td><code>openaios start -c path.yml</code></td><td>Start with a custom config file path.</td></tr>
+        <tr><td><code>openaios status</code></td><td>Show runner health, session counts, and budget usage.</td></tr>
+        <tr><td><code>openaios init</code></td><td>Scaffold an <code>openAIOS.yml</code> in the current directory.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>openaios start</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code># Default — reads openAIOS.yml in current directory
+node packages/cli/dist/bin/openaios.js start
+
+# Custom config
+node packages/cli/dist/bin/openaios.js start -c /home/aios/openaios/openAIOS.yml
+
+# After global install (or if symlinked to PATH)
+openaios start
+openaios start -c /path/to/config.yml</code></pre>
+  </div>
+
+  <h3>openaios status</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>openaios status
+# Output:
+# Agent         Runner    Status    Sessions   Budget (month)
+# assistant     native    healthy   3          $1.24 / $10.00
+# coder         docker    healthy   1          $0.08 / $50.00</code></pre>
+  </div>
+
+  <h3>openaios init</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code># Scaffolds openAIOS.yml with example config in current directory
+openaios init</code></pre>
+  </div>
+
+  <h3>Development commands</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>pnpm install        # Install all workspace dependencies
+pnpm build          # Build all packages (turbo)
+pnpm typecheck      # TypeScript check all packages
+pnpm test           # Run tests (router package)</code></pre>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Deployment -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="deployment">
+  <h2>Deployment</h2>
+  <p class="section-lead">
+    Production target: forge-smith (mini PC, Ubuntu 24.04, systemd). Transport: Tailscale SSH.
+  </p>
+
+  <h3>First-time server setup</h3>
+  <p>Run once on the server as root:</p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>git clone https://github.com/NeoForgeEngineering/openaios /tmp/openaios-setup
+sudo bash /tmp/openaios-setup/scripts/setup-systemd.sh</code></pre>
+  </div>
+
+  <p>This creates:</p>
+  <ul>
+    <li><code>aios</code> system user at <code>/home/aios/</code></li>
+    <li>Directory structure: <code>/home/aios/openaios/</code>, <code>/home/aios/workspaces/</code>, <code>/home/aios/data/</code></li>
+    <li>Env file: <code>/home/aios/.env</code> (chmod 600 — edit with your secrets)</li>
+    <li>Systemd unit: <code>/etc/systemd/system/openaios.service</code></li>
+    <li>Sudo rule: <code>aios</code> user can restart its own service</li>
+  </ul>
+
+  <h3>Deploy from Mac</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code># Build locally
+pnpm install && pnpm build
+
+# Deploy (rsync + SSH restart via Tailscale)
+REMOTE_HOST=forge-smith ./scripts/deploy.sh
+
+# Dry run first
+./scripts/deploy.sh --dry-run</code></pre>
+  </div>
+
+  <p>What <code>deploy.sh</code> does:</p>
+  <ol>
+    <li>Verifies Tailscale SSH connectivity to forge-smith</li>
+    <li><code>rsync</code> built files to forge-smith (excludes <code>.env</code>, <code>openAIOS.yml</code>, <code>data/</code>, <code>workspaces/</code>)</li>
+    <li>Runs <code>pnpm install --prod</code> on the remote</li>
+    <li>Runs <code>sudo systemctl restart openaios</code></li>
+    <li>Verifies the service is running</li>
+  </ol>
+
+  <h3>Managing the service</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code># Edit config (on forge-smith)
+nano /home/aios/openaios/openAIOS.yml
+
+# Edit secrets
+nano /home/aios/.env
+
+# Restart after config change
+sudo systemctl restart openaios
+
+# Follow logs
+sudo journalctl -u openaios -f
+
+# Last 100 lines
+sudo journalctl -u openaios -n 100 --no-pager</code></pre>
+  </div>
+
+  <h3>GitHub Actions CI/CD</h3>
+  <p>Push to <code>main</code> triggers automatic deploy via <code>.github/workflows/deploy-forge-smith.yml</code>.</p>
+
+  <p>Required GitHub secrets (in the <code>forge-smith</code> environment):</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Secret</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>FORGE_SMITH_HOST</code></td><td>Tailscale hostname or IP of forge-smith</td></tr>
+        <tr><td><code>FORGE_SMITH_SSH_KEY</code></td><td>Private SSH key for <code>aios@forge-smith</code></td></tr>
+        <tr><td><code>TAILSCALE_OAUTH_CLIENT_ID</code></td><td>For GitHub Actions Tailscale connection</td></tr>
+        <tr><td><code>TAILSCALE_OAUTH_SECRET</code></td><td>Paired with the OAuth client ID</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Node.js management</h3>
+  <p>
+    Node.js 22 is managed via nvm for the <code>aios</code> user. The systemd unit includes
+    the nvm path in <code>Environment=PATH=</code>. To upgrade: install the new version via nvm
+    as the <code>aios</code> user, then update the path in the systemd unit.
+  </p>
+
+  <h3>Credential handling</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code># /home/aios/.env (chmod 600, owned by aios)
+TELEGRAM_TOKEN=...
+ANTHROPIC_API_KEY=...
+BR_URL=...
+BR_TOKEN=...</code></pre>
+  </div>
+  <p>
+    Config files (<code>openAIOS.yml</code>) reference secrets via <code>${ENV_VAR}</code> — never
+    inline credentials. <code>.gitignore</code> excludes <code>.env</code>, <code>openAIOS.yml</code>,
+    <code>data/</code>, and <code>workspaces/</code>.
+  </p>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Package Structure -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="packages">
+  <h2>Package Structure</h2>
+  <p class="section-lead">
+    openAIOS is a pnpm monorepo built with Turbo. Packages are layered — each depends only on
+    packages below it in the dependency graph.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Package</th><th>Name</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>packages/core</code></td><td><code>@openaios/core</code></td><td>Zod schemas, TypeScript interfaces, config loader. Foundation for all other packages.</td></tr>
+        <tr><td><code>packages/runner</code></td><td><code>@openaios/runner</code></td><td>Runner adapters: ClaudeCodeRunner, OllamaRunner, OpenAICompatRunner, DockerRunner. ContainerOrchestrator, CapabilityProvisioner.</td></tr>
+        <tr><td><code>packages/budget</code></td><td><code>@openaios/budget</code></td><td>SQLite-backed BudgetManager — records costs, enforces period limits.</td></tr>
+        <tr><td><code>packages/governance</code></td><td><code>@openaios/governance</code></td><td>LocalGovernance (in-process) and BRGovernance (external API) policy adapters.</td></tr>
+        <tr><td><code>packages/router</code></td><td><code>@openaios/router</code></td><td>RouterCore (message pipeline), AgentBus, SessionStore.</td></tr>
+        <tr><td><code>packages/channels</code></td><td><code>@openaios/channels</code></td><td>TelegramAdapter, WebhookAdapter, DiscordAdapter.</td></tr>
+        <tr><td><code>packages/cli</code></td><td><code>@openaios/cli</code></td><td><code>openaios start/status/init</code> commands. Wires all packages together.</td></tr>
+        <tr><td><code>packages/br-sdk</code></td><td><code>@openaios/br-sdk</code></td><td>Bot Resources API client used by BRGovernance.</td></tr>
+        <tr><td><code>packages/br-hook</code></td><td><code>@openaios/br-hook</code></td><td>Claude Code hook scripts for BR integration.</td></tr>
+        <tr><td><code>packages/images/agent</code></td><td>—</td><td>Dockerfile: node:22 + claude CLI + <code>call_agent</code> bash tool. Base image for Docker-mode agents.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Package dependency graph</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">text</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>core
+ ├── runner        (ClaudeCodeRunner, OllamaRunner, OpenAICompatRunner, DockerRunner)
+ │    └── docker   (ContainerOrchestrator, CapabilityProvisioner)
+ ├── budget        (SQLite BudgetManager)
+ ├── br-sdk        (Bot Resources API client)
+ │    └── br-hook  (Claude Code hook scripts)
+ └── governance    (LocalGovernance, BRGovernance)
+      └── router   (RouterCore, AgentBus, SessionStore)
+           └── channels  (TelegramAdapter, DiscordAdapter, WebhookAdapter)
+                └── cli  (openaios init/start/status)</code></pre>
+  </div>
+
+  <div class="callout callout-note">
+    <div class="callout-icon">i</div>
+    <div><p>Turbo enforces build order — packages only build after their dependencies. Run <code>pnpm build</code> from the repo root to build everything in the correct order.</p></div>
+  </div>
+
+  <p style="margin-top:40px;font-size:13px;color:var(--text-muted);border-top:1px solid var(--border);padding-top:24px">
+    openAIOS is licensed under AGPL-3.0 with a commercial exception.
+    See <code>COMMERCIAL_LICENSE.md</code> for commercial use terms. &mdash;
+    <a href="https://github.com/NeoForgeEngineering/openaios" target="_blank">GitHub</a>
+  </p>
+</section>
+
+</div><!-- .content -->
+</main>
+
+<script>
+// ── Copy button ────────────────────────────────────────────────────────────
+function copyCode(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  const text = pre.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.classList.remove('copied');
+    }, 1800);
+  }).catch(() => {
+    // Fallback for older browsers
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+  });
+}
+
+// ── Mobile sidebar ─────────────────────────────────────────────────────────
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('visible');
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('visible');
+}
+
+// ── Active TOC on scroll ───────────────────────────────────────────────────
+(function () {
+  const tocLinks = Array.from(document.querySelectorAll('.toc-item'));
+  const sectionIds = tocLinks
+    .map(a => a.getAttribute('href'))
+    .filter(h => h && h.startsWith('#'))
+    .map(h => h.slice(1));
+
+  const sections = sectionIds.map(id => document.getElementById(id)).filter(Boolean);
+
+  let ticking = false;
+  let currentActive = null;
+
+  function updateActive() {
+    const scrollY = window.scrollY + 100; // offset for heading visibility
+    let active = null;
+
+    for (let i = sections.length - 1; i >= 0; i--) {
+      if (sections[i].getBoundingClientRect().top + window.scrollY <= scrollY) {
+        active = sectionIds[i];
+        break;
+      }
+    }
+
+    if (active !== currentActive) {
+      currentActive = active;
+      tocLinks.forEach(link => {
+        const href = link.getAttribute('href');
+        if (href && href.slice(1) === active) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      });
+    }
+    ticking = false;
+  }
+
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(updateActive);
+      ticking = true;
+    }
+  }, { passive: true });
+
+  // Initial run
+  updateActive();
+})();
+</script>
+</body>
+</html>
