@@ -485,6 +485,10 @@ tr:hover td { background: rgba(255,255,255,0.02); }
     <div class="toc-group-label">Getting Started</div>
     <a class="toc-item" href="#what-is" onclick="closeSidebar()">What is openAIOS</a>
     <a class="toc-item" href="#quickstart" onclick="closeSidebar()">Quickstart</a>
+    <a class="toc-item" href="#installation" onclick="closeSidebar()">Installation</a>
+    <a class="toc-item sub" href="#install-oneliner" onclick="closeSidebar()">One-liner</a>
+    <a class="toc-item sub" href="#install-service" onclick="closeSidebar()">Service daemon</a>
+    <a class="toc-item sub" href="#install-upgrade" onclick="closeSidebar()">Upgrading</a>
     <a class="toc-item" href="#how-it-works" onclick="closeSidebar()">How It Works</a>
 
     <div class="toc-group-label">Channels &amp; Runners</div>
@@ -506,6 +510,8 @@ tr:hover td { background: rgba(255,255,255,0.02); }
     <div class="toc-group-label">Operations</div>
     <a class="toc-item" href="#security" onclick="closeSidebar()">Security</a>
     <a class="toc-item" href="#cli" onclick="closeSidebar()">CLI Reference</a>
+    <a class="toc-item sub" href="#cli-service" onclick="closeSidebar()">service</a>
+    <a class="toc-item sub" href="#cli-upgrade" onclick="closeSidebar()">upgrade</a>
     <a class="toc-item" href="#deployment" onclick="closeSidebar()">Deployment</a>
     <a class="toc-item" href="#packages" onclick="closeSidebar()">Package Structure</a>
   </div>
@@ -694,6 +700,101 @@ data:
       </div>
     </div>
   </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- Installation -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="installation">
+  <h2>Installation</h2>
+  <p class="section-lead">Install openAIOS on any Linux or macOS machine in one command. No root required by default.</p>
+
+  <h3 id="install-oneliner">One-liner installer</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>curl -fsSL https://raw.githubusercontent.com/NeoForgeEngineering/openaios/main/install.sh | bash</code></pre>
+  </div>
+
+  <p>The installer handles everything automatically:</p>
+  <ol>
+    <li>Detects macOS / Linux</li>
+    <li>Ensures <strong>Node.js 22+</strong> — installs via <code>nvm</code> if not present, patches your shell profile</li>
+    <li>Ensures <strong>pnpm</strong> — installs globally via npm if missing</li>
+    <li>Clones the repo into <code>~/.openaios</code> (or <code>$OPENAIOS_DIR</code>)</li>
+    <li>Runs <code>pnpm install &amp;&amp; pnpm build</code></li>
+    <li>Rebuilds native modules (<code>better-sqlite3</code>) for the running Node version</li>
+    <li>Writes an <code>openaios</code> wrapper script to <code>~/.local/bin/openaios</code></li>
+  </ol>
+
+  <p>After install, the full flow is:</p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>openaios init              # scaffold openAIOS.yml in current directory
+$EDITOR openAIOS.yml       # configure your agents and channels
+openaios start             # run in the foreground (Ctrl+C to stop)
+openaios service install   # register as a background daemon</code></pre>
+  </div>
+
+  <div class="callout callout-note">
+    <div class="callout-icon">i</div>
+    <div>
+      <p>To install to a custom location, set <code>OPENAIOS_DIR</code> before piping:</p>
+      <div class="code-block" style="margin-top:10px">
+        <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+        <pre><code>OPENAIOS_DIR=/opt/openaios curl -fsSL .../install.sh | bash</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <h3 id="install-service">Service daemon</h3>
+  <p>Register openAIOS as a long-running background service. Run this from the directory containing your <code>openAIOS.yml</code>:</p>
+
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>openaios service install</code></pre>
+  </div>
+
+  <p>On <strong>Linux</strong> this installs a user-level systemd unit (<code>~/.config/systemd/user/openaios.service</code>) — no sudo needed. Pass <code>--system</code> for a system-level unit.</p>
+  <p>On <strong>macOS</strong> this writes a LaunchAgent plist to <code>~/Library/LaunchAgents/dev.openaios.agent.plist</code> and loads it immediately.</p>
+
+  <p>Full <code>service</code> subcommand reference:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Command</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>openaios service install</code></td><td>Register as systemd (Linux) or LaunchAgent (macOS) daemon</td></tr>
+        <tr><td><code>openaios service install --system</code></td><td>System-level unit (requires sudo, Linux only)</td></tr>
+        <tr><td><code>openaios service install -d /path</code></td><td>Set config directory (default: CWD)</td></tr>
+        <tr><td><code>openaios service uninstall</code></td><td>Remove daemon registration</td></tr>
+        <tr><td><code>openaios service start</code></td><td>Start the background service</td></tr>
+        <tr><td><code>openaios service stop</code></td><td>Stop the background service</td></tr>
+        <tr><td><code>openaios service restart</code></td><td>Restart the background service</td></tr>
+        <tr><td><code>openaios service status</code></td><td>Show service status (delegates to systemctl / launchctl)</td></tr>
+        <tr><td><code>openaios service logs</code></td><td>Tail service logs (default: last 50 lines)</td></tr>
+        <tr><td><code>openaios service logs -n 200</code></td><td>Tail last 200 lines</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code># After service install — manage without openaios CLI too:
+
+# Linux
+systemctl --user status openaios
+journalctl --user -u openaios -f
+
+# macOS
+tail -f ~/.openaios/logs/openaios.log</code></pre>
+  </div>
+
+  <h3 id="install-upgrade">Upgrading</h3>
+  <p>Pull the latest release, rebuild, and restart the service in one command:</p>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>openaios upgrade</code></pre>
+  </div>
+  <p>This runs: <code>git reset --hard origin/main</code> → <code>pnpm install</code> → <code>pnpm build</code> → rebuild native modules → restart service (if registered).</p>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════════════ -->
@@ -1454,10 +1555,16 @@ RestrictSUIDSGID=yes</code></pre>
     <table>
       <thead><tr><th>Command</th><th>Description</th></tr></thead>
       <tbody>
-        <tr><td><code>openaios start</code></td><td>Start the runtime. Reads <code>openAIOS.yml</code> in CWD.</td></tr>
+        <tr><td><code>openaios init</code></td><td>Scaffold an <code>openAIOS.yml</code> in the current directory.</td></tr>
+        <tr><td><code>openaios start</code></td><td>Start the runtime in the foreground.</td></tr>
         <tr><td><code>openaios start -c path.yml</code></td><td>Start with a custom config file path.</td></tr>
         <tr><td><code>openaios status</code></td><td>Show runner health, session counts, and budget usage.</td></tr>
-        <tr><td><code>openaios init</code></td><td>Scaffold an <code>openAIOS.yml</code> in the current directory.</td></tr>
+        <tr><td><code>openaios upgrade</code></td><td>Pull latest, rebuild, restart service.</td></tr>
+        <tr><td><code>openaios service install</code></td><td>Register as systemd / LaunchAgent daemon.</td></tr>
+        <tr><td><code>openaios service uninstall</code></td><td>Remove daemon registration.</td></tr>
+        <tr><td><code>openaios service start|stop|restart</code></td><td>Control the background service.</td></tr>
+        <tr><td><code>openaios service status</code></td><td>Show service status.</td></tr>
+        <tr><td><code>openaios service logs [-n N]</code></td><td>Tail service logs.</td></tr>
       </tbody>
     </table>
   </div>
@@ -1465,32 +1572,61 @@ RestrictSUIDSGID=yes</code></pre>
   <h3>openaios start</h3>
   <div class="code-block">
     <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-    <pre><code># Default — reads openAIOS.yml in current directory
-node packages/cli/dist/bin/openaios.js start
-
-# Custom config
-node packages/cli/dist/bin/openaios.js start -c /home/aios/openaios/openAIOS.yml
-
-# After global install (or if symlinked to PATH)
-openaios start
-openaios start -c /path/to/config.yml</code></pre>
+    <pre><code>openaios start                          # reads openAIOS.yml in CWD
+openaios start -c /path/to/config.yml   # custom config</code></pre>
   </div>
 
   <h3>openaios status</h3>
   <div class="code-block">
     <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
     <pre><code>openaios status
-# Output:
-# Agent         Runner    Status    Sessions   Budget (month)
-# assistant     native    healthy   3          $1.24 / $10.00
-# coder         docker    healthy   1          $0.08 / $50.00</code></pre>
+# === openAIOS Status ===
+# Runners:
+#   ✓ assistant (ollama/qwen2.5-coder:7b) — healthy
+# Sessions:
+#   assistant: 1 active session(s)</code></pre>
   </div>
 
   <h3>openaios init</h3>
   <div class="code-block">
     <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-    <pre><code># Scaffolds openAIOS.yml with example config in current directory
-openaios init</code></pre>
+    <pre><code>openaios init   # writes openAIOS.yml from the bundled example template</code></pre>
+  </div>
+
+  <h3 id="cli-upgrade">openaios upgrade</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code>openaios upgrade
+# [openaios] Upgrading openAIOS at ~/.openaios...
+# [openaios] ✓ Updated to a1b2c3d
+# [openaios] ✓ Dependencies updated
+# [openaios] ✓ Build complete
+# [openaios] ✓ Native modules rebuilt
+# [openaios] ✓ Service restarted
+# [openaios] ✓ Upgrade complete!</code></pre>
+  </div>
+
+  <h3 id="cli-service">openaios service</h3>
+  <div class="code-block">
+    <div class="code-block-header"><span class="lang-label">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+    <pre><code># Register as daemon (run from directory with openAIOS.yml)
+openaios service install
+
+# System-level unit (Linux, requires sudo)
+openaios service install --system
+
+# Lifecycle
+openaios service start
+openaios service stop
+openaios service restart
+openaios service status
+
+# Logs (last 50 lines by default)
+openaios service logs
+openaios service logs -n 200
+
+# Remove
+openaios service uninstall</code></pre>
   </div>
 
   <h3>Development commands</h3>
