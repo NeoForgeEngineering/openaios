@@ -59,7 +59,18 @@ nano /home/aios/.env
 sudo systemctl restart openaios
 ```
 
+## Dashboard
+
+Once running, the dashboard is available at `http://{tailscale-ip}:3000` (or `http://localhost:3000` if bound to localhost). It shows:
+
+- Agent health, session counts, and budget usage
+- Live log stream (SSE)
+- All active sessions
+- Latest security audit findings
+
 ## Logs
+
+The runtime emits structured JSON logs to stdout (captured by journald):
 
 ```bash
 # Follow logs
@@ -67,7 +78,21 @@ sudo journalctl -u openaios -f
 
 # Last 100 lines
 sudo journalctl -u openaios -n 100 --no-pager
+
+# Filter by level (jq required)
+sudo journalctl -u openaios -f -o cat | jq 'select(.level == "error")'
 ```
+
+## Security Audit
+
+Run a one-shot security audit against the current config:
+
+```bash
+cd /home/aios/openaios
+openaios audit
+```
+
+Exits 0 if no ERROR findings, exits 1 otherwise. Suitable for CI gates.
 
 ## GitHub Actions CI/CD
 
