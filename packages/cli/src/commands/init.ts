@@ -1,4 +1,4 @@
-import { writeFileSync, existsSync, cpSync } from 'node:fs'
+import { writeFileSync, existsSync, cpSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const EXAMPLE_CONFIG_PATHS = [
@@ -27,11 +27,24 @@ export async function initCommand(): Promise<void> {
     console.log('Created openAIOS.yml with minimal default config.')
   }
 
+  // Scaffold shared memory directory
+  const memoryDir = resolve('./data/memory')
+  mkdirSync(memoryDir, { recursive: true })
+  const factsFile = resolve(memoryDir, 'facts.md')
+  if (!existsSync(factsFile)) {
+    writeFileSync(factsFile, FACTS_STARTER, 'utf-8')
+    console.log('Created ./data/memory/facts.md')
+  }
+
   console.log('\nNext steps:')
   console.log('  1. Edit openAIOS.yml to configure your agents')
   console.log('  2. Set required environment variables (TELEGRAM_TOKEN, etc.)')
   console.log('  3. Run: openaios start')
 }
+
+const FACTS_STARTER = `# Facts
+<!-- Agents write persistent facts here. Format: - [YYYY-MM-DD] <fact> -->
+`
 
 const MINIMAL_CONFIG = `# openAIOS configuration
 # See openAIOS.yml.example for full reference

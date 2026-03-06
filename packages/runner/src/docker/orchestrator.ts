@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { logger } from '@openaios/core'
 
 const NETWORK_NAME = 'openaios'
 
@@ -46,6 +47,13 @@ export class ContainerOrchestrator {
     }
   }
 
+  /** Create the shared memory volume idempotently. */
+  async ensureMemoryVolume(volumeName = 'openaios-shared-memory'): Promise<void> {
+    await this.run('docker', ['volume', 'create', volumeName]).catch(() => {
+      // Ignore "volume already exists" error
+    })
+  }
+
   /**
    * Start the container if it is not already running.
    * Idempotent — safe to call on every turn.
@@ -56,8 +64,13 @@ export class ContainerOrchestrator {
   }
 
   /** Start a fresh container for an agent. */
-  async start(agentName: string, config: DockerContainerConfig = {}): Promise<void> {
+  async start(
+    agentName: string,
+    config: DockerContainerConfig = {},
+    memoryVolume = 'openaios-shared-memory'
+  ): Promise<void> {
     await this.ensureNetwork()
+    await this.ensureMemoryVolume(memoryVolume)
 
     const name = this.containerName(agentName)
     const image = config.image ?? 'openaios/agent:latest'
@@ -74,6 +87,7 @@ export class ContainerOrchestrator {
       '--env', `OPENAIOS_BUS_URL=${this.busUrl}`,
       '--env', `OPENAIOS_BUS_TOKEN=${this.busToken}`,
       '--volume', `${this.volumeName(agentName)}:/workspace`,
+      '--volume', `${memoryVolume}:/workspace/memory`,
       image,
       'tail', '-f', '/dev/null',
     ]
@@ -86,7 +100,7 @@ export class ContainerOrchestrator {
     }
 
     this.managedAgents.add(agentName)
-    console.log(`[orchestrator] Started container: ${name}`)
+    logger.info('[orchestrator]', `Started container: ${name}`)
   }
 
   /** Stop and remove the container for an agent. */
@@ -96,7 +110,7 @@ export class ContainerOrchestrator {
     await this.run('docker', ['stop', name]).catch(() => {})
     await this.run('docker', ['rm', name]).catch(() => {})
     this.managedAgents.delete(agentName)
-    console.log(`[orchestrator] Stopped container: ${name}`)
+    logger.info('[orchestrator]', `Stopped container: ${name}`)
   }
 
   /** Execute a command inside a running agent container. */

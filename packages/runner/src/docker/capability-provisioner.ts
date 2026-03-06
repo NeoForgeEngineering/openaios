@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import type { AgentCapabilities } from '@openaios/core'
+import { logger } from '@openaios/core'
 import type { ContainerOrchestrator } from './orchestrator.js'
 
 const BROWSER_IMAGE = 'ghcr.io/zenika/alpine-chrome:latest'
@@ -40,7 +41,7 @@ export class CapabilityProvisioner {
         'sh', '-c',
         `echo 'CDP_URL=${cdpUrl}' >> /workspace/.env.capabilities`,
       ])
-      console.log(`[capability-provisioner] Browser sidecar ready for "${agentName}": ${cdpUrl}`)
+      logger.info('[capability-provisioner]', `Browser sidecar ready for "${agentName}": ${cdpUrl}`)
       this.provisionedAgents.add(agentName)
     }
   }
@@ -51,7 +52,7 @@ export class CapabilityProvisioner {
     await this.spawnCollect('docker', ['stop', name]).catch(() => {})
     await this.spawnCollect('docker', ['rm', name]).catch(() => {})
     this.provisionedAgents.delete(agentName)
-    console.log(`[capability-provisioner] Deprovisioned sidecars for "${agentName}"`)
+    logger.info('[capability-provisioner]', `Deprovisioned sidecars for "${agentName}"`)
   }
 
   /** Deprovision all sidecars for all provisioned agents. */

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Server, IncomingMessage, ServerResponse } from 'node:http'
 import type { ChannelAdapter, ChannelTarget, InboundMessage, MessageHandler, OutboundMessage } from '@openaios/core'
+import { logger } from '@openaios/core'
 
 export interface WebhookAdapterOptions {
   /**
@@ -49,7 +50,7 @@ export class WebhookAdapter implements ChannelAdapter {
       }
     })
 
-    console.log(`[webhook] Registered on path ${this.path}`)
+    logger.info('[webhook]', `Registered on path ${this.path}`)
   }
 
   async stop(): Promise<void> {

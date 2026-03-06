@@ -1,24 +1,31 @@
 import { resolve, join } from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, mkdirSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import type { AgentBusRequest, AgentBusResponse } from '@openaios/core'
-import { loadConfig } from '@openaios/core'
+import { loadConfig, logger } from '@openaios/core'
 import { createRunner, ContainerOrchestrator, CapabilityProvisioner } from '@openaios/runner'
 import { BudgetManager } from '@openaios/budget'
 import { createGovernance } from '@openaios/governance'
 import { RouterCore, SQLiteSessionStore, AgentBus } from '@openaios/router'
 import { TelegramAdapter, WebhookAdapter } from '@openaios/channels'
 import type { AgentRoute } from '@openaios/router'
+import { DashboardServer } from '../dashboard/server.js'
+import { SecurityAuditor } from '../audit/auditor.js'
 
 export async function startCommand(options: { config?: string; dataDir?: string }): Promise<void> {
   const config = loadConfig(options.config)
 
   const dataDir = resolve(options.dataDir ?? config.data.dir)
   const workspacesDir = join(dataDir, '..', 'workspaces')
+  const memoryDir = resolve(config.memory.dir)
 
-  console.log(`[openaios] Starting with config: ${options.config ?? 'openAIOS.yml'}`)
-  console.log(`[openaios] Data dir: ${dataDir}`)
+  logger.info('[openaios]', `Starting with config: ${options.config ?? 'openAIOS.yml'}`)
+  logger.info('[openaios]', `Data dir: ${dataDir}`)
+
+  // Ensure memory directory exists
+  mkdirSync(memoryDir, { recursive: true })
+  logger.info('[openaios]', `Shared memory dir: ${memoryDir}`)
 
   // Session store
   const sessionStore = new SQLiteSessionStore(dataDir)
@@ -48,19 +55,16 @@ export async function startCommand(options: { config?: string; dataDir?: string 
   // Detect if any agent needs docker mode
   const hasDockerAgents = config.agents.some((a) => a.runner.mode === 'docker')
 
-  // --- Shared HTTP server (webhook channels) ---
+  // --- Shared HTTP server (dashboard + webhook channels) ---
   const httpServer = createServer()
-  const hasWebhookAgents = config.agents.some((a) => a.channels.webhook)
 
-  if (hasWebhookAgents) {
-    await new Promise<void>((resolve, reject) => {
-      httpServer.listen(config.network.port, () => {
-        console.log(`[openaios] HTTP server listening on port ${config.network.port}`)
-        resolve()
-      })
-      httpServer.on('error', reject)
+  await new Promise<void>((resolve, reject) => {
+    httpServer.listen(config.network.port, () => {
+      logger.info('[openaios]', `HTTP server listening on port ${config.network.port}`)
+      resolve()
     })
-  }
+    httpServer.on('error', reject)
+  })
 
   // --- Bus HTTP server ---
   const busToken = randomUUID()
@@ -112,7 +116,7 @@ export async function startCommand(options: { config?: string; dataDir?: string 
   })
 
   const busUrl = `http://127.0.0.1:${busPort}`
-  console.log(`[openaios] Agent bus listening on ${busUrl}`)
+  logger.info('[openaios]', `Agent bus listening on ${busUrl}`)
 
   // --- Container orchestration ---
   let orchestrator: ContainerOrchestrator | undefined
@@ -139,16 +143,27 @@ export async function startCommand(options: { config?: string; dataDir?: string 
     }
   }
 
+  // Memory system prompt suffix
+  const memoryPromptSuffix = [
+    '',
+    `Your shared memory directory is at ${memoryDir} (or /workspace/memory in docker mode).`,
+    'Use Read/Write/Grep tools on .md files there to store and recall information across sessions.',
+  ].join('\n')
+
   // Build routes
   const providers = config.models?.providers ?? {}
   const routes: AgentRoute[] = []
+  const agentModels = new Map<string, string>()
 
   for (const agent of config.agents) {
-    const systemPrompt = resolvePersona(agent.persona)
+    const basePersona = resolvePersona(agent.persona)
+    const systemPrompt = basePersona + memoryPromptSuffix
     const runner = createRunner(agent.model.default, providers, agent.runner, {
       ...(orchestrator !== undefined && { orchestrator }),
       agentName: agent.name,
     })
+
+    agentModels.set(agent.name, agent.model.default)
 
     // Auto-add call_agent to allowedTools when agent-calls is configured
     const agentCallsTools =
@@ -180,7 +195,7 @@ export async function startCommand(options: { config?: string; dataDir?: string 
         runner,
         channel: adapter,
       })
-      console.log(`[openaios] Agent "${agent.name}" → Telegram`)
+      logger.info('[openaios]', `Agent "${agent.name}" → Telegram`)
     }
 
     if (agent.channels.webhook) {
@@ -199,11 +214,11 @@ export async function startCommand(options: { config?: string; dataDir?: string 
         runner,
         channel: adapter,
       })
-      console.log(`[openaios] Agent "${agent.name}" → Webhook (${agent.channels.webhook.path})`)
+      logger.info('[openaios]', `Agent "${agent.name}" → Webhook (${agent.channels.webhook.path})`)
     }
 
     if (!agent.channels.telegram && !agent.channels.discord && !agent.channels.webhook) {
-      console.warn(`[openaios] Agent "${agent.name}" has no channels configured — skipping`)
+      logger.warn('[openaios]', `Agent "${agent.name}" has no channels configured — skipping`)
     }
   }
 
@@ -220,9 +235,38 @@ export async function startCommand(options: { config?: string; dataDir?: string 
     bus,
   })
 
+  // --- Dashboard ---
+  const dashboardServer = new DashboardServer({
+    server: httpServer,
+    sessionStore,
+    budgetManager: budget,
+    config,
+    agentModels,
+  })
+  dashboardServer.register()
+
+  // --- Security auditor ---
+  const auditor = new SecurityAuditor({ config, sessionStore, budgetManager: budget })
+  const runAudit = async () => {
+    const result = await auditor.run()
+    dashboardServer.setAuditResult(result)
+    for (const finding of result.findings) {
+      if (finding.severity === 'ERROR') {
+        logger.error('[audit]', `${finding.agentName} ${finding.code}: ${finding.message}`)
+      } else if (finding.severity === 'WARN') {
+        logger.warn('[audit]', `${finding.agentName} ${finding.code}: ${finding.message}`)
+      } else {
+        logger.info('[audit]', `${finding.agentName} ${finding.code}: ${finding.message}`)
+      }
+    }
+  }
+  await runAudit()
+  const auditInterval = setInterval(() => { void runAudit() }, 30 * 60 * 1000)
+
   // Graceful shutdown
   const shutdown = async (signal: string) => {
-    console.log(`\n[openaios] Received ${signal}, shutting down...`)
+    logger.info('[openaios]', `Received ${signal}, shutting down...`)
+    clearInterval(auditInterval)
     await router.stop()
     busServer.close()
     httpServer.close()
@@ -236,7 +280,8 @@ export async function startCommand(options: { config?: string; dataDir?: string 
   process.on('SIGTERM', () => shutdown('SIGTERM'))
 
   await router.start()
-  console.log('[openaios] Running. Press Ctrl+C to stop.')
+  logger.info('[openaios]', `Dashboard available at http://localhost:${config.network.port}`)
+  logger.info('[openaios]', 'Running. Press Ctrl+C to stop.')
 }
 
 function resolvePersona(persona: string): string {
@@ -246,7 +291,7 @@ function resolvePersona(persona: string): string {
     if (existsSync(path)) {
       return readFileSync(path, 'utf-8')
     }
-    console.warn(`[openaios] Persona file not found: ${path} — using as inline string`)
+    logger.warn('[openaios]', `Persona file not found: ${path} — using as inline string`)
   }
   return persona
 }

@@ -24,4 +24,6 @@ export interface SessionStore {
   delete(key: SessionKey): Promise<void>
   /** List all sessions for an agent (for status/admin) */
   listByAgent(agentName: string): Promise<Session[]>
+  /** List all sessions across all agents (for dashboard) */
+  listAll(): Promise<Session[]>
 }

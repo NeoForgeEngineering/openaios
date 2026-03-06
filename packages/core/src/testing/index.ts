@@ -93,6 +93,10 @@ export class MockSessionStore implements SessionStore {
   async listByAgent(agentName: string): Promise<Session[]> {
     return [...this.store.values()].filter((s) => s.agentName === agentName)
   }
+
+  async listAll(): Promise<Session[]> {
+    return [...this.store.values()]
+  }
 }
 
 // ---------------------------------------------------------------------------

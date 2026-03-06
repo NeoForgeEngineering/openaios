@@ -63,6 +63,27 @@ export class FileSessionStore implements SessionStore {
     }
   }
 
+  async listAll(): Promise<Session[]> {
+    try {
+      const files = await readdir(this.dir)
+      const sessions = await Promise.all(
+        files
+          .filter((f) => f.endsWith('.json'))
+          .map(async (f) => {
+            try {
+              const raw = await readFile(join(this.dir, f), 'utf-8')
+              return JSON.parse(raw) as Session
+            } catch {
+              return null
+            }
+          })
+      )
+      return sessions.filter((s): s is Session => s !== null)
+    } catch {
+      return []
+    }
+  }
+
   private filePath(key: SessionKey): string {
     // Sanitise to prevent path traversal
     const safe = (s: string) => s.replace(/[^a-zA-Z0-9_-]/g, '_')

@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { platform, homedir } from 'node:os'
+import { logger } from '@openaios/core'
 
 const PLIST_PATH = resolve(homedir(), 'Library/LaunchAgents/dev.openaios.agent.plist')
 const SYSTEMD_USER_UNIT = resolve(homedir(), '.config/systemd/user/openaios.service')
@@ -14,10 +15,10 @@ function getInstallDir(): string {
 }
 
 function step(msg: string): void {
-  console.log(`\n[openaios] ${msg}`)
+  logger.info('[openaios]', msg)
 }
 function ok(msg: string): void {
-  console.log(`[openaios] ✓ ${msg}`)
+  logger.info('[openaios]', `✓ ${msg}`)
 }
 function exec(cmd: string, cwd?: string): void {
   execSync(cmd, { stdio: 'inherit', ...(cwd ? { cwd } : {}) })
@@ -27,8 +28,8 @@ export async function upgradeCommand(): Promise<void> {
   const installDir = getInstallDir()
 
   if (!existsSync(resolve(installDir, '.git'))) {
-    console.error(`[openaios] Install directory ${installDir} is not a git repository.`)
-    console.error(`[openaios] If you installed via install.sh, try re-running the installer.`)
+    logger.error('[openaios]', `Install directory ${installDir} is not a git repository.`)
+    logger.error('[openaios]', 'If you installed via install.sh, try re-running the installer.')
     process.exit(1)
   }
 
@@ -59,13 +60,13 @@ export async function upgradeCommand(): Promise<void> {
       ok('Native modules rebuilt')
     }
   } catch {
-    console.log('[openaios] ! Native module rebuild skipped (run manually if needed)')
+    logger.warn('[openaios]', 'Native module rebuild skipped (run manually if needed)')
   }
 
   // Restart service if running
   restartService()
 
-  console.log('\n[openaios] ✓ Upgrade complete!\n')
+  logger.info('[openaios]', '✓ Upgrade complete!')
 }
 
 function restartService(): void {

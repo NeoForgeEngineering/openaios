@@ -10,3 +10,7 @@ export type { Config, AgentConfig, AgentBudgetConfig, RunnerConfig, ModelProvide
 
 // Config loader
 export { loadConfig } from './config-loader.js'
+
+// Logger
+export { logger } from './logger.js'
+export type { LogEntry, LogLevel } from './logger.js'

@@ -1,5 +1,6 @@
 import { Bot, GrammyError, HttpError } from 'grammy'
 import type { ChannelAdapter, ChannelTarget, InboundMessage, MessageHandler, OutboundMessage } from '@openaios/core'
+import { logger } from '@openaios/core'
 
 const MAX_TELEGRAM_MESSAGE_LENGTH = 4096
 
@@ -38,11 +39,11 @@ export class TelegramAdapter implements ChannelAdapter {
 
     this.bot.catch((err) => {
       if (err instanceof GrammyError) {
-        console.error('[telegram] API error:', err.description)
+        logger.error('[telegram]', `API error: ${err.description}`)
       } else if (err instanceof HttpError) {
-        console.error('[telegram] Network error:', err.message)
+        logger.error('[telegram]', `Network error: ${err.message}`)
       } else {
-        console.error('[telegram] Unknown error:', err)
+        logger.error('[telegram]', 'Unknown error', err)
       }
     })
   }
@@ -53,10 +54,10 @@ export class TelegramAdapter implements ChannelAdapter {
     // Start polling in the background — don't await (it runs indefinitely)
     this.bot.start({
       onStart: (info) => {
-        console.log(`[telegram] Polling as @${info.username}`)
+        logger.info('[telegram]', `Polling as @${info.username}`)
       },
     }).catch((err) => {
-      console.error('[telegram] Bot crashed:', err)
+      logger.error('[telegram]', 'Bot crashed', err)
       this.running = false
     })
   }
@@ -65,7 +66,7 @@ export class TelegramAdapter implements ChannelAdapter {
     if (!this.running) return
     await this.bot.stop()
     this.running = false
-    console.log('[telegram] Stopped')
+    logger.info('[telegram]', 'Stopped')
   }
 
   async send(target: ChannelTarget, msg: OutboundMessage): Promise<void> {

@@ -146,6 +146,11 @@ const DataSchema = z.object({
   dir: z.string().default('./data'),
 })
 
+const MemorySchema = z.object({
+  /** Shared markdown memory directory — accessible by all agents via file tools */
+  dir: z.string().default('./data/memory'),
+})
+
 export const ConfigSchema = z.object({
   agents: z.array(AgentSchema).min(1, 'At least one agent must be configured'),
   models: z
@@ -157,6 +162,7 @@ export const ConfigSchema = z.object({
   governance: GovernanceSchema.optional(),
   network: NetworkSchema.default({}),
   data: DataSchema.default({}),
+  memory: MemorySchema.default({}),
 })
 
 export type Config = z.infer<typeof ConfigSchema>

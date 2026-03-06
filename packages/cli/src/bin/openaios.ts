@@ -4,6 +4,7 @@ import { startCommand } from '../commands/start.js'
 import { statusCommand } from '../commands/status.js'
 import { initCommand } from '../commands/init.js'
 import { upgradeCommand } from '../commands/upgrade.js'
+import { auditCommand } from '../commands/audit.js'
 import {
   serviceInstallCommand,
   serviceUninstallCommand,
@@ -50,6 +51,14 @@ program
   .description('Pull latest changes, rebuild, and restart the service')
   .action(async () => {
     await upgradeCommand().catch(fatal)
+  })
+
+program
+  .command('audit')
+  .description('Run security audit and print findings (exits 1 if any ERROR findings)')
+  .option('-c, --config <path>', 'Path to openAIOS.yml', 'openAIOS.yml')
+  .action(async (opts: { config: string }) => {
+    await auditCommand(opts).catch(fatal)
   })
 
 // ── service subcommands ───────────────────────────────────────────────────────
@@ -115,6 +124,7 @@ service
 program.parse()
 
 function fatal(err: unknown): never {
-  console.error('[openaios] Fatal error:', (err as Error).message ?? err)
+  const msg = err instanceof Error ? err.message : String(err)
+  process.stderr.write(`[openaios] Fatal error: ${msg}\n`)
   process.exit(1)
 }

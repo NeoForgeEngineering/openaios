@@ -7,6 +7,7 @@ import type {
   Session,
   SessionStore,
 } from '@openaios/core'
+import { logger } from '@openaios/core'
 import type { BudgetManager } from '@openaios/budget'
 import type { AgentBus } from './agent-bus.js'
 
@@ -58,12 +59,12 @@ export class RouterCore {
 
   async start(): Promise<void> {
     await Promise.all(this.opts.routes.map((r) => r.channel.start()))
-    console.log(`[router] Started ${this.opts.routes.length} agent(s)`)
+    logger.info('[router]', `Started ${this.opts.routes.length} agent(s)`)
   }
 
   async stop(): Promise<void> {
     await Promise.all(this.opts.routes.map((r) => r.channel.stop()))
-    console.log('[router] Stopped')
+    logger.info('[router]', 'Stopped')
   }
 
   private async handleMessage(route: AgentRoute, msg: InboundMessage): Promise<void> {
@@ -78,7 +79,7 @@ export class RouterCore {
 
     const userId = `${route.channel.channelType}:${msg.userId}`
     if (!SESSION_ID_REGEX.test(userId)) {
-      console.warn(`[router] Invalid userId format: ${userId}`)
+      logger.warn('[router]', `Invalid userId format: ${userId}`)
       return
     }
 
@@ -101,9 +102,7 @@ export class RouterCore {
     const isDowngraded = effectiveModel !== route.defaultModel
 
     if (isDowngraded) {
-      console.log(
-        `[router] ${route.agentName}: budget downgrade → ${effectiveModel}`
-      )
+      logger.info('[router]', `${route.agentName}: budget downgrade → ${effectiveModel}`)
     }
 
     try {
@@ -161,7 +160,7 @@ export class RouterCore {
         replyToMessageId: msg.messageId,
       })
     } catch (err) {
-      console.error(`[router] ${route.agentName} error:`, err)
+      logger.error('[router]', `${route.agentName} error`, err)
       await route.channel.send(msg.source, {
         text: 'Sorry, something went wrong. Please try again.',
         replyToMessageId: msg.messageId,

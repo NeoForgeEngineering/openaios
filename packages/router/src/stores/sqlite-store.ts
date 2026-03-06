@@ -77,6 +77,13 @@ export class SQLiteSessionStore implements SessionStore {
     return rows.map(rowToSession)
   }
 
+  async listAll(): Promise<Session[]> {
+    const rows = this.db
+      .prepare(`SELECT * FROM sessions ORDER BY updated_at DESC`)
+      .all() as DbRow[]
+    return rows.map(rowToSession)
+  }
+
   close(): void {
     this.db.close()
   }
