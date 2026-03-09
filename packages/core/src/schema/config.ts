@@ -22,7 +22,7 @@ const AgentPermissionsSchema = z.object({
 
 const RunnerConfigSchema = z.object({
   /** Execution mode for this agent's runner */
-  mode: z.enum(['native', 'docker']).default('native'),
+  mode: z.enum(['docker', 'native']).default('docker'),
   /** Docker config — only used when mode is 'docker' */
   docker: z
     .object({
@@ -81,6 +81,8 @@ const AgentSchema = z.object({
   permissions: AgentPermissionsSchema.default({}),
   runner: RunnerConfigSchema.default({}),
   capabilities: CapabilitiesSchema.default({}),
+  /** Skills to load — each maps to {skills.dir}/{name}/SKILL.md injected into system prompt */
+  skills: z.array(z.string()).default([]),
 })
 
 const OllamaProviderSchema = z.object({
@@ -132,6 +134,23 @@ const GovernanceSchema = z.object({
   br: BRGovernanceSchema.optional(),
 })
 
+const FederationPeerSchema = z.object({
+  node_id: z.string(),
+  /** Full bus URL of the peer, e.g. http://100.x.x.x:4000 */
+  bus_url: envString(),
+  /** Token this node presents when calling the peer */
+  token: envString(),
+  /** Agent names hosted on this peer node */
+  agents: z.array(z.string()).default([]),
+})
+
+const FederationSchema = z.object({
+  node_id: z.string(),
+  /** Token peer nodes must present when calling into this node */
+  inbound_token: envString(),
+  peers: z.array(FederationPeerSchema).default([]),
+})
+
 const NetworkSchema = z.object({
   /** Interface to bind — 'tailscale' resolves the Tailscale IP automatically */
   bind: z.union([z.literal('tailscale'), z.literal('localhost'), z.string()]).default('tailscale'),
@@ -139,6 +158,8 @@ const NetworkSchema = z.object({
   port: z.number().int().default(3000),
   /** Port for the internal agent bus HTTP server (0 = random) */
   bus_port: z.number().int().default(0),
+  /** Register agent containers on the Tailscale network via tsdproxy */
+  tsdproxy: z.boolean().default(false),
 })
 
 const DataSchema = z.object({
@@ -149,6 +170,11 @@ const DataSchema = z.object({
 const MemorySchema = z.object({
   /** Shared markdown memory directory — accessible by all agents via file tools */
   dir: z.string().default('./data/memory'),
+})
+
+const SkillsSchema = z.object({
+  /** Directory containing skill subdirectories with SKILL.md files */
+  dir: z.string().default('~/.openclaw/skills'),
 })
 
 export const ConfigSchema = z.object({
@@ -163,6 +189,8 @@ export const ConfigSchema = z.object({
   network: NetworkSchema.default({}),
   data: DataSchema.default({}),
   memory: MemorySchema.default({}),
+  skills: SkillsSchema.default({}),
+  federation: FederationSchema.optional(),
 })
 
 export type Config = z.infer<typeof ConfigSchema>
@@ -171,3 +199,6 @@ export type AgentBudgetConfig = z.infer<typeof AgentBudgetSchema>
 export type RunnerConfig = z.infer<typeof RunnerConfigSchema>
 export type ModelProviders = z.infer<typeof ModelProvidersSchema>
 export type AgentCapabilities = z.infer<typeof CapabilitiesSchema>
+export type SkillsConfig = z.infer<typeof SkillsSchema>
+export type FederationConfig = z.infer<typeof FederationSchema>
+export type FederationPeer = z.infer<typeof FederationPeerSchema>

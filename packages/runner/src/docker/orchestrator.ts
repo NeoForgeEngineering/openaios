@@ -22,12 +22,18 @@ export interface ExecResult {
 export class ContainerOrchestrator {
   private readonly busUrl: string
   private readonly busToken: string
+  private readonly nodeId: string
+  private readonly tsdproxy: boolean
+  private readonly containerBusUrl: string
   /** Track containers we've started so stopAll() knows what to clean up */
   private readonly managedAgents = new Set<string>()
 
-  constructor(opts: { busUrl: string; busToken: string }) {
+  constructor(opts: { busUrl: string; busToken: string; nodeId?: string; tsdproxy?: boolean; containerBusUrl?: string }) {
     this.busUrl = opts.busUrl
     this.busToken = opts.busToken
+    this.nodeId = opts.nodeId ?? 'local'
+    this.tsdproxy = opts.tsdproxy ?? false
+    this.containerBusUrl = opts.containerBusUrl ?? opts.busUrl
   }
 
   private containerName(agentName: string): string {
@@ -83,14 +89,23 @@ export class ContainerOrchestrator {
       '--network', NETWORK_NAME,
       '--memory', memory,
       '--cpus', cpus,
+      '--add-host', 'host.docker.internal:host-gateway',
       '--env', `OPENAIOS_AGENT_NAME=${agentName}`,
-      '--env', `OPENAIOS_BUS_URL=${this.busUrl}`,
+      '--env', `OPENAIOS_BUS_URL=${this.containerBusUrl}`,
       '--env', `OPENAIOS_BUS_TOKEN=${this.busToken}`,
+      '--env', `OPENAIOS_NODE_ID=${this.nodeId}`,
       '--volume', `${this.volumeName(agentName)}:/workspace`,
       '--volume', `${memoryVolume}:/workspace/memory`,
-      image,
-      'tail', '-f', '/dev/null',
     ]
+
+    if (this.tsdproxy) {
+      args.push(
+        '--label', 'tsdproxy.enable=true',
+        '--label', `tsdproxy.name=openaios-${agentName}`,
+      )
+    }
+
+    args.push(image, 'tail', '-f', '/dev/null')
 
     const result = await this.run('docker', args)
     if (result.exitCode !== 0) {

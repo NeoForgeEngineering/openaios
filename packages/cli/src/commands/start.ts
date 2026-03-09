@@ -1,6 +1,7 @@
 import { resolve, join } from 'node:path'
 import { homedir } from 'node:os'
 import { existsSync, readFileSync, mkdirSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import type { AgentBusRequest, AgentBusResponse } from '@openaios/core'
@@ -8,7 +9,7 @@ import { loadConfig, logger } from '@openaios/core'
 import { createRunner, ContainerOrchestrator, CapabilityProvisioner } from '@openaios/runner'
 import { BudgetManager } from '@openaios/budget'
 import { createGovernance } from '@openaios/governance'
-import { RouterCore, SQLiteSessionStore, AgentBus } from '@openaios/router'
+import { RouterCore, SQLiteSessionStore, AgentBus, FederatedAgentBus } from '@openaios/router'
 import { TelegramAdapter, WebhookAdapter } from '@openaios/channels'
 import type { AgentRoute } from '@openaios/router'
 import { DashboardServer } from '../dashboard/server.js'
@@ -73,7 +74,19 @@ export async function startCommand(options: { config?: string; dataDir?: string 
   // --- Bus HTTP server ---
   const busToken = randomUUID()
   let busPort = 0
-  const bus = new AgentBus({ governance, sessionStore, budget })
+  const localBus = new AgentBus({ governance, sessionStore, budget })
+  const bus: AgentBus | FederatedAgentBus = config.federation
+    ? new FederatedAgentBus(
+        localBus,
+        config.federation.node_id,
+        config.federation.peers.map((p) => ({
+          nodeId: p.node_id,
+          busUrl: p.bus_url,
+          token: p.token,
+          agents: p.agents,
+        }))
+      )
+    : localBus
 
   const busServer = createServer((req, res) => {
     if (req.method !== 'POST' || req.url !== '/internal/bus/message') {
@@ -82,7 +95,10 @@ export async function startCommand(options: { config?: string; dataDir?: string 
     }
 
     const auth = req.headers['authorization']
-    if (auth !== `Bearer ${busToken}`) {
+    const inboundToken = config.federation?.inbound_token
+    const isLocal = auth === `Bearer ${busToken}`
+    const isPeer = inboundToken !== undefined && auth === `Bearer ${inboundToken}`
+    if (!isLocal && !isPeer) {
       res.writeHead(401).end('Unauthorized')
       return
     }
@@ -99,7 +115,11 @@ export async function startCommand(options: { config?: string; dataDir?: string 
         return
       }
 
-      bus.request(parsed).then((result: AgentBusResponse) => {
+      const busReq: AgentBusRequest = isPeer
+        ? { ...parsed, inboundPeer: config.federation?.node_id ?? 'peer' }
+        : parsed
+
+      bus.request(busReq).then((result: AgentBusResponse) => {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify(result))
       }).catch((err: unknown) => {
@@ -110,24 +130,39 @@ export async function startCommand(options: { config?: string; dataDir?: string 
     })
   })
 
+  const busBindAddr = resolveBindAddress(config.network.bind)
   await new Promise<void>((resolve) => {
     const desiredPort = config.network.bus_port ?? 0
-    busServer.listen(desiredPort, '127.0.0.1', () => {
+    busServer.listen(desiredPort, busBindAddr, () => {
       const addr = busServer.address()
       busPort = typeof addr === 'object' && addr !== null ? addr.port : desiredPort
       resolve()
     })
   })
 
-  const busUrl = `http://127.0.0.1:${busPort}`
+  const busUrl = `http://${busBindAddr}:${busPort}`
   logger.info('[openaios]', `Agent bus listening on ${busUrl}`)
+
+  // Containers on the Docker bridge can't reach the tailscale IP.
+  // host.docker.internal resolves to the Docker host gateway (requires --add-host in orchestrator).
+  const containerBusUrl = config.network.bind === 'tailscale'
+    ? `http://host.docker.internal:${busPort}`
+    : busUrl
+
+  if (config.network.tsdproxy) {
+    logger.info('[openaios]', 'tsdproxy enabled — agent containers will be registered on the Tailscale network')
+  }
 
   // --- Container orchestration ---
   let orchestrator: ContainerOrchestrator | undefined
   let provisioner: CapabilityProvisioner | undefined
 
   if (hasDockerAgents) {
-    orchestrator = new ContainerOrchestrator({ busUrl, busToken })
+    orchestrator = new ContainerOrchestrator({
+      busUrl, containerBusUrl, busToken,
+      ...(config.federation?.node_id !== undefined && { nodeId: config.federation.node_id }),
+      ...(config.network.tsdproxy && { tsdproxy: true }),
+    })
     provisioner = new CapabilityProvisioner(orchestrator)
 
     // Start containers for all docker-mode agents up front
@@ -352,6 +387,18 @@ export async function startCommand(options: { config?: string; dataDir?: string 
   await router.start()
   logger.info('[openaios]', `Dashboard available at http://localhost:${config.network.port}`)
   logger.info('[openaios]', 'Running. Press Ctrl+C to stop.')
+}
+
+function resolveBindAddress(bind: string): string {
+  if (bind === 'localhost') return '127.0.0.1'
+  if (bind === 'tailscale') {
+    const result = spawnSync('tailscale', ['ip', '-4'], { encoding: 'utf-8', timeout: 3000 })
+    const ip = result.stdout?.trim()
+    if (ip) return ip
+    logger.warn('[openaios]', 'Tailscale IP not found, falling back to 127.0.0.1')
+    return '127.0.0.1'
+  }
+  return bind
 }
 
 function resolvePersona(persona: string): string {
