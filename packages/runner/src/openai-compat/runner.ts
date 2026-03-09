@@ -1,4 +1,9 @@
-import type { RunInput, RunResult, RunnerAdapter, StreamChunk } from '@openaios/core'
+import type {
+  RunInput,
+  RunnerAdapter,
+  RunResult,
+  StreamChunk,
+} from '@openaios/core'
 
 interface OpenAICompatRunnerOptions {
   apiKey: string
@@ -21,7 +26,10 @@ export class OpenAICompatRunner implements RunnerAdapter {
 
   constructor(options: OpenAICompatRunnerOptions) {
     this.apiKey = options.apiKey
-    this.baseUrl = (options.baseUrl ?? 'https://api.openai.com').replace(/\/$/, '')
+    this.baseUrl = (options.baseUrl ?? 'https://api.openai.com').replace(
+      /\/$/,
+      '',
+    )
     this.defaultModel = options.defaultModel ?? 'gpt-4o-mini'
   }
 
@@ -45,7 +53,9 @@ export class OpenAICompatRunner implements RunnerAdapter {
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI-compat API error ${response.status}: ${await response.text()}`)
+      throw new Error(
+        `OpenAI-compat API error ${response.status}: ${await response.text()}`,
+      )
     }
 
     const data = (await response.json()) as {
@@ -62,8 +72,12 @@ export class OpenAICompatRunner implements RunnerAdapter {
       claudeSessionId: input.sessionKey,
       output,
       model: data.model,
-      ...(data.usage?.prompt_tokens !== undefined && { inputTokens: data.usage.prompt_tokens }),
-      ...(data.usage?.completion_tokens !== undefined && { outputTokens: data.usage.completion_tokens }),
+      ...(data.usage?.prompt_tokens !== undefined && {
+        inputTokens: data.usage.prompt_tokens,
+      }),
+      ...(data.usage?.completion_tokens !== undefined && {
+        outputTokens: data.usage.completion_tokens,
+      }),
     }
   }
 
@@ -140,10 +154,12 @@ export class OpenAICompatRunner implements RunnerAdapter {
     return model.replace(/^[^/]+\//, '') || this.defaultModel
   }
 
-  private getHistory(sessionKey: string): Array<{ role: string; content: string }> {
+  private getHistory(
+    sessionKey: string,
+  ): Array<{ role: string; content: string }> {
     if (!this.history.has(sessionKey)) {
       this.history.set(sessionKey, [])
     }
-    return this.history.get(sessionKey)!
+    return this.history.get(sessionKey) ?? []
   }
 }

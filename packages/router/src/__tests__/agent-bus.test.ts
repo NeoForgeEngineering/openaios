@@ -1,19 +1,33 @@
-import { test, describe, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { AgentBus, AgentNotFoundError, AgentCallDeniedError } from '../agent-bus.js'
-import { MockRunner, MockGovernance, MockSessionStore } from '@openaios/core/testing'
+import { beforeEach, describe, test } from 'node:test'
+import type { BudgetCheckResult, BudgetManager } from '@openaios/budget'
+import {
+  MockGovernance,
+  MockRunner,
+  MockSessionStore,
+} from '@openaios/core/testing'
 import type { AgentBusEntry } from '../agent-bus.js'
-import type { BudgetManager, BudgetCheckResult } from '@openaios/budget'
+import {
+  AgentBus,
+  AgentCallDeniedError,
+  AgentNotFoundError,
+} from '../agent-bus.js'
 
 // ---------------------------------------------------------------------------
 // Minimal BudgetManager mock — only the methods AgentBus uses
 // ---------------------------------------------------------------------------
 function makeMockBudget(override?: Partial<BudgetCheckResult>): BudgetManager {
-  const check: BudgetCheckResult = { allowed: true, effectiveModel: 'test-model', ...override }
+  const check: BudgetCheckResult = {
+    allowed: true,
+    effectiveModel: 'test-model',
+    ...override,
+  }
   const recorded: Array<{ agent: string; cost: number }> = []
   return {
-    check: (_agentName: string, requestedModel: string) =>
-      ({ ...check, effectiveModel: check.effectiveModel ?? requestedModel }),
+    check: (_agentName: string, requestedModel: string) => ({
+      ...check,
+      effectiveModel: check.effectiveModel ?? requestedModel,
+    }),
     record: (agent: string, cost: number) => recorded.push({ agent, cost }),
     _recorded: recorded,
   } as unknown as BudgetManager
@@ -71,7 +85,7 @@ describe('AgentBus', () => {
         assert.ok(err instanceof AgentNotFoundError)
         assert.ok((err as Error).message.includes('callee'))
         return true
-      }
+      },
     )
   })
 
@@ -87,13 +101,13 @@ describe('AgentBus', () => {
         assert.ok(err instanceof AgentCallDeniedError)
         assert.ok((err as Error).message.includes('policy violation'))
         return true
-      }
+      },
     )
   })
 
   // AC3: toAgent not in allowedCallees → AgentCallDeniedError
   test('throws AgentCallDeniedError when toAgent not in allowedCallees', async () => {
-    bus.register('caller', makeEntry({ allowedCallees: [] }))  // callee NOT listed
+    bus.register('caller', makeEntry({ allowedCallees: [] })) // callee NOT listed
     bus.register('callee', makeEntry())
 
     await assert.rejects(
@@ -102,7 +116,7 @@ describe('AgentBus', () => {
         assert.ok(err instanceof AgentCallDeniedError)
         assert.ok((err as Error).message.includes('allowedCallees'))
         return true
-      }
+      },
     )
   })
 
@@ -118,7 +132,7 @@ describe('AgentBus', () => {
       (err: unknown) => {
         assert.ok((err as Error).message.includes('monthly limit reached'))
         return true
-      }
+      },
     )
   })
 
@@ -131,6 +145,7 @@ describe('AgentBus', () => {
     await bus.request(makeRequest({ message: 'do something' }))
 
     assert.equal(runner.calls.length, 1)
+    // biome-ignore lint/style/noNonNullAssertion: length asserted above
     const input = runner.calls[0]!
     assert.equal(input.agentName, 'callee')
     assert.equal(input.message, 'do something')
@@ -157,16 +172,23 @@ describe('AgentBus', () => {
 
     await bus.request(makeRequest())
 
-    assert.equal(runner.calls[0]!.claudeSessionId, 'prior-session-abc')
+    assert.equal(runner.calls[0]?.claudeSessionId, 'prior-session-abc')
   })
 
   // AC7: Successful call → budget recorded, governance events fired, response returned
   test('records budget and fires governance events on success', async () => {
     const runner = new MockRunner()
-    runner.response = { output: 'done', costUsd: 0.002, claudeSessionId: 'new-session' }
+    runner.response = {
+      output: 'done',
+      costUsd: 0.002,
+      claudeSessionId: 'new-session',
+    }
     const recorded: Array<{ agent: string; cost: number }> = []
     budget = {
-      check: (_: string, model: string) => ({ allowed: true, effectiveModel: model }),
+      check: (_: string, model: string) => ({
+        allowed: true,
+        effectiveModel: model,
+      }),
       record: (agent: string, cost: number) => recorded.push({ agent, cost }),
     } as unknown as BudgetManager
 
@@ -179,18 +201,22 @@ describe('AgentBus', () => {
     assert.equal(response.output, 'done')
     assert.equal(response.costUsd, 0.002)
     assert.equal(recorded.length, 1)
-    assert.equal(recorded[0]!.agent, 'callee')
-    assert.equal(recorded[0]!.cost, 0.002)
+    assert.equal(recorded[0]?.agent, 'callee')
+    assert.equal(recorded[0]?.cost, 0.002)
     assert.equal(governance.toolUseEvents.length, 1)
-    assert.equal(governance.toolUseEvents[0]!.tool, 'call_agent')
+    assert.equal(governance.toolUseEvents[0]?.tool, 'call_agent')
     assert.equal(governance.turnCostEvents.length, 1)
-    assert.equal(governance.turnCostEvents[0]!.agentName, 'callee')
+    assert.equal(governance.turnCostEvents[0]?.agentName, 'callee')
   })
 
   // AC7b: Session is persisted after successful call
   test('persists session after successful call', async () => {
     const runner = new MockRunner()
-    runner.response = { output: 'result', claudeSessionId: 'sess-xyz', costUsd: 0.001 }
+    runner.response = {
+      output: 'result',
+      claudeSessionId: 'sess-xyz',
+      costUsd: 0.001,
+    }
     bus.register('caller', makeEntry({ allowedCallees: ['callee'] }))
     bus.register('callee', makeEntry({ runner }))
 
@@ -216,7 +242,7 @@ describe('AgentBus', () => {
         assert.ok(err instanceof AgentCallDeniedError)
         assert.ok((err as Error).message.includes('allowedCallees'))
         return true
-      }
+      },
     )
   })
 })

@@ -1,7 +1,15 @@
 import { spawn } from 'node:child_process'
-import type { RunInput, RunResult, RunnerAdapter, StreamChunk } from '@openaios/core'
+import type {
+  RunInput,
+  RunnerAdapter,
+  RunResult,
+  StreamChunk,
+} from '@openaios/core'
 import { buildClaudeArgs } from '../claude-code/runner.js'
-import type { ContainerOrchestrator, DockerContainerConfig } from './orchestrator.js'
+import type {
+  ContainerOrchestrator,
+  DockerContainerConfig,
+} from './orchestrator.js'
 
 // Mirrors the shape emitted by `claude --output-format stream-json --verbose`
 interface ClaudeStreamMessage {
@@ -49,7 +57,6 @@ export class DockerRunner implements RunnerAdapter {
 
   async run(input: RunInput): Promise<RunResult> {
     const chunks: StreamChunk[] = []
-    let result: RunResult | undefined
 
     const gen = this.runStreaming(input)
     let next = await gen.next()
@@ -57,7 +64,7 @@ export class DockerRunner implements RunnerAdapter {
       chunks.push(next.value)
       next = await gen.next()
     }
-    result = next.value
+    const result = next.value
     return result
   }
 
@@ -66,7 +73,12 @@ export class DockerRunner implements RunnerAdapter {
 
     const claudeArgs = buildClaudeArgs(input)
     // Execute: docker exec <container> claude <args...>
-    const dockerArgs = ['exec', `openaios-${this.agentName}`, this.bin, ...claudeArgs]
+    const dockerArgs = [
+      'exec',
+      `openaios-${this.agentName}`,
+      this.bin,
+      ...claudeArgs,
+    ]
 
     const proc = spawn('docker', dockerArgs, {
       shell: false,
@@ -85,7 +97,9 @@ export class DockerRunner implements RunnerAdapter {
     let stderrOutput = ''
 
     proc.stderr.setEncoding('utf-8')
-    proc.stderr.on('data', (chunk: string) => { stderrOutput += chunk })
+    proc.stderr.on('data', (chunk: string) => {
+      stderrOutput += chunk
+    })
 
     const parseStream = async function* (): AsyncGenerator<StreamChunk, void> {
       let partial = ''
@@ -140,12 +154,14 @@ export class DockerRunner implements RunnerAdapter {
 
     if (exitCode !== 0) {
       throw new Error(
-        `docker exec claude exited with code ${String(exitCode)}. stderr: ${stderrOutput.slice(0, 500)}`
+        `docker exec claude exited with code ${String(exitCode)}. stderr: ${stderrOutput.slice(0, 500)}`,
       )
     }
 
     if (!lastClaudeSessionId) {
-      throw new Error('claude did not emit a session_id — cannot resume this session')
+      throw new Error(
+        'claude did not emit a session_id — cannot resume this session',
+      )
     }
 
     return {
@@ -162,7 +178,10 @@ export class DockerRunner implements RunnerAdapter {
     const running = await this.orchestrator.isRunning(this.agentName)
     if (!running) return false
 
-    const result = await this.orchestrator.exec(this.agentName, ['which', this.bin])
+    const result = await this.orchestrator.exec(this.agentName, [
+      'which',
+      this.bin,
+    ])
     return result.exitCode === 0
   }
 }

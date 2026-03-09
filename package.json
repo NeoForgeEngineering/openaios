@@ -9,12 +9,26 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "lint": "turbo run lint",
+    "lint": "biome check packages/",
+    "format": "biome check --write packages/",
     "clean": "turbo run clean && rm -rf node_modules",
-    "dev": "turbo run dev --parallel"
+    "dev": "turbo run dev --parallel",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint-staged"
+  },
+  "lint-staged": {
+    "packages/**/*.{ts,tsx}": [
+      "biome check --write --no-errors-on-unmatched",
+      "biome check --no-errors-on-unmatched"
+    ]
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.6",
     "@types/node": "^22.0.0",
+    "lint-staged": "^16.3.2",
+    "simple-git-hooks": "^2.13.1",
     "turbo": "^2.0.0",
     "typescript": "^5.5.0"
   },

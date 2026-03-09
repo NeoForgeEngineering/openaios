@@ -1,14 +1,13 @@
-import type { Server, IncomingMessage, ServerResponse } from 'node:http'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
+import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { join } from 'node:path'
-import type { Config } from '@openaios/core'
-import { logger } from '@openaios/core'
-import type { SessionStore } from '@openaios/core'
 import type { BudgetManager } from '@openaios/budget'
+import type { Config, SessionStore } from '@openaios/core'
+import { logger } from '@openaios/core'
 import type { AuditResult } from '../audit/auditor.js'
-import { DASHBOARD_HTML } from './html.js'
-import { patchAgentInConfig } from './config-writer.js'
 import type { AgentPatch } from './config-writer.js'
+import { patchAgentInConfig } from './config-writer.js'
+import { DASHBOARD_HTML } from './html.js'
 
 export interface DashboardServerOptions {
   server: Server
@@ -41,16 +40,22 @@ export class DashboardServer {
   }
 
   register(): void {
-    this.opts.server.on('request', (req: IncomingMessage, res: ServerResponse) => {
-      const url = req.url ?? '/'
-      if (url === '/' || url.startsWith('/api/')) {
-        void this.handleRequest(req, res)
-      }
-    })
+    this.opts.server.on(
+      'request',
+      (req: IncomingMessage, res: ServerResponse) => {
+        const url = req.url ?? '/'
+        if (url === '/' || url.startsWith('/api/')) {
+          void this.handleRequest(req, res)
+        }
+      },
+    )
     logger.info('[dashboard]', `Routes registered`)
   }
 
-  private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  private async handleRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
     const url = req.url ?? '/'
 
     if (url === '/') {
@@ -101,7 +106,7 @@ export class DashboardServer {
 
     const patchMatch = url.match(/^\/api\/config\/agents\/([^/]+)$/)
     if (patchMatch && req.method === 'PATCH') {
-      await this.handleAgentPatch(req, res, patchMatch[1]!)
+      await this.handleAgentPatch(req, res, patchMatch[1] ?? '')
       return
     }
 
@@ -134,7 +139,7 @@ export class DashboardServer {
             },
           }),
         }
-      })
+      }),
     )
 
     res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -164,7 +169,7 @@ export class DashboardServer {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     })
     res.write(':\n\n') // initial comment to establish connection
@@ -209,8 +214,12 @@ export class DashboardServer {
           const stat = statSync(join(skillsDir, name))
           if (!stat.isDirectory()) continue
           const content = readFileSync(skillMd, 'utf-8')
-          const firstLine = content.split('\n').find((l) => l.trim().length > 0) ?? ''
-          skills.push({ name, description: firstLine.replace(/^#+\s*/, '').trim() })
+          const firstLine =
+            content.split('\n').find((l) => l.trim().length > 0) ?? ''
+          skills.push({
+            name,
+            description: firstLine.replace(/^#+\s*/, '').trim(),
+          })
         } catch {
           // skip
         }
@@ -225,12 +234,14 @@ export class DashboardServer {
   private async handleAgentPatch(
     req: IncomingMessage,
     res: ServerResponse,
-    agentName: string
+    agentName: string,
   ): Promise<void> {
     let body = ''
     req.setEncoding('utf-8')
     await new Promise<void>((resolve) => {
-      req.on('data', (chunk: string) => { body += chunk })
+      req.on('data', (chunk: string) => {
+        body += chunk
+      })
       req.on('end', resolve)
     })
 
@@ -250,9 +261,15 @@ export class DashboardServer {
     const patch: AgentPatch = {
       ...(parsed.persona !== undefined && { persona: parsed.persona }),
       ...(parsed.skills !== undefined && { skills: parsed.skills }),
-      ...(parsed.capabilities?.browser !== undefined && { browser: parsed.capabilities.browser }),
-      ...(parsed.permissions?.allow !== undefined && { allowedTools: parsed.permissions.allow }),
-      ...(parsed.permissions?.deny !== undefined && { deniedTools: parsed.permissions.deny }),
+      ...(parsed.capabilities?.browser !== undefined && {
+        browser: parsed.capabilities.browser,
+      }),
+      ...(parsed.permissions?.allow !== undefined && {
+        allowedTools: parsed.permissions.allow,
+      }),
+      ...(parsed.permissions?.deny !== undefined && {
+        deniedTools: parsed.permissions.deny,
+      }),
     }
 
     try {
@@ -263,9 +280,12 @@ export class DashboardServer {
       if (agent) {
         if (patch.persona !== undefined) agent.persona = patch.persona
         if (patch.skills !== undefined) agent.skills = patch.skills
-        if (patch.allowedTools !== undefined) agent.permissions.allow = patch.allowedTools
-        if (patch.deniedTools !== undefined) agent.permissions.deny = patch.deniedTools
-        if (patch.browser !== undefined) agent.capabilities.browser = patch.browser
+        if (patch.allowedTools !== undefined)
+          agent.permissions.allow = patch.allowedTools
+        if (patch.deniedTools !== undefined)
+          agent.permissions.deny = patch.deniedTools
+        if (patch.browser !== undefined)
+          agent.capabilities.browser = patch.browser
       }
       res.writeHead(204).end()
     } catch (err) {

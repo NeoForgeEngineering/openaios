@@ -1,7 +1,12 @@
 import { spawn } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import type { RunInput, RunResult, RunnerAdapter, StreamChunk } from '@openaios/core'
+import { mkdir } from 'node:fs/promises'
+import type {
+  RunInput,
+  RunnerAdapter,
+  RunResult,
+  StreamChunk,
+} from '@openaios/core'
 
 interface ClaudeCodeRunnerOptions {
   /** Path to the claude binary. Defaults to 'claude' (searched in PATH). */
@@ -37,7 +42,6 @@ export class ClaudeCodeRunner implements RunnerAdapter {
 
   async run(input: RunInput): Promise<RunResult> {
     const chunks: StreamChunk[] = []
-    let result: RunResult | undefined
 
     const gen = this.runStreaming(input)
     let next = await gen.next()
@@ -45,7 +49,7 @@ export class ClaudeCodeRunner implements RunnerAdapter {
       chunks.push(next.value)
       next = await gen.next()
     }
-    result = next.value
+    const result = next.value
 
     return result
   }
@@ -56,8 +60,11 @@ export class ClaudeCodeRunner implements RunnerAdapter {
     const args = this.buildArgs(input)
     // Build clean env: strip CLAUDECODE to allow nested claude invocations,
     // and disable interactive prompts.
-    const env: Record<string, string | undefined> = { ...process.env, CLAUDE_CODE_INTERACTIVE: '0' }
-    delete env['CLAUDECODE']
+    const env: Record<string, string | undefined> = {
+      ...process.env,
+      CLAUDE_CODE_INTERACTIVE: '0',
+    }
+    delete env.CLAUDECODE
 
     const proc = spawn(this.bin, args, {
       cwd: input.workspaceDir,
@@ -137,12 +144,14 @@ export class ClaudeCodeRunner implements RunnerAdapter {
 
     if (exitCode !== 0 && exitCode !== null) {
       throw new Error(
-        `claude exited with code ${exitCode}. stderr: ${stderrOutput.slice(0, 500)}`
+        `claude exited with code ${exitCode}. stderr: ${stderrOutput.slice(0, 500)}`,
       )
     }
 
     if (!lastClaudeSessionId) {
-      throw new Error('claude did not emit a session_id — cannot resume this session')
+      throw new Error(
+        'claude did not emit a session_id — cannot resume this session',
+      )
     }
 
     return {
@@ -179,10 +188,7 @@ export class ClaudeCodeRunner implements RunnerAdapter {
  * Exported so DockerRunner can reuse identical arg-building logic.
  */
 export function buildClaudeArgs(input: RunInput): string[] {
-  const args: string[] = [
-    '--output-format', 'stream-json',
-    '--verbose',
-  ]
+  const args: string[] = ['--output-format', 'stream-json', '--verbose']
 
   if (input.model && input.model !== 'claude-code') {
     args.push('--model', input.model)
@@ -190,7 +196,10 @@ export function buildClaudeArgs(input: RunInput): string[] {
 
   // Only resume if the session ID looks like a real Claude session ID (UUID-like).
   // Prevents passing invalid IDs from other runners (e.g. Ollama stores the session key).
-  if (input.claudeSessionId && /^[0-9a-f-]{20,}$/i.test(input.claudeSessionId)) {
+  if (
+    input.claudeSessionId &&
+    /^[0-9a-f-]{20,}$/i.test(input.claudeSessionId)
+  ) {
     args.push('--resume', input.claudeSessionId)
   }
 

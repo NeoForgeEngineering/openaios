@@ -1,4 +1,9 @@
-import type { RunInput, RunResult, RunnerAdapter, StreamChunk } from '@openaios/core'
+import type {
+  RunInput,
+  RunnerAdapter,
+  RunResult,
+  StreamChunk,
+} from '@openaios/core'
 
 interface OllamaRunnerOptions {
   baseUrl?: string
@@ -38,7 +43,9 @@ export class OllamaRunner implements RunnerAdapter {
     })
 
     if (!response.ok) {
-      throw new Error(`Ollama API error ${response.status}: ${await response.text()}`)
+      throw new Error(
+        `Ollama API error ${response.status}: ${await response.text()}`,
+      )
     }
 
     const data = (await response.json()) as {
@@ -55,7 +62,9 @@ export class OllamaRunner implements RunnerAdapter {
       claudeSessionId: input.sessionKey, // used as a stable key, not a real claude session
       output,
       model: `ollama/${model}`,
-      ...(data.prompt_eval_count !== undefined && { inputTokens: data.prompt_eval_count }),
+      ...(data.prompt_eval_count !== undefined && {
+        inputTokens: data.prompt_eval_count,
+      }),
       ...(data.eval_count !== undefined && { outputTokens: data.eval_count }),
     }
   }
@@ -114,17 +123,21 @@ export class OllamaRunner implements RunnerAdapter {
 
   async healthCheck(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/api/tags`, { signal: AbortSignal.timeout(3000) })
+      const res = await fetch(`${this.baseUrl}/api/tags`, {
+        signal: AbortSignal.timeout(3000),
+      })
       return res.ok
     } catch {
       return false
     }
   }
 
-  private getHistory(sessionKey: string): Array<{ role: string; content: string }> {
+  private getHistory(
+    sessionKey: string,
+  ): Array<{ role: string; content: string }> {
     if (!this.history.has(sessionKey)) {
       this.history.set(sessionKey, [])
     }
-    return this.history.get(sessionKey)!
+    return this.history.get(sessionKey) ?? []
   }
 }
