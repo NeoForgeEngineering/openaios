@@ -54,15 +54,19 @@ export class ClaudeCodeRunner implements RunnerAdapter {
     await this.ensureWorkspace(input.workspaceDir)
 
     const args = this.buildArgs(input)
+    // Build clean env: strip CLAUDECODE to allow nested claude invocations,
+    // and disable interactive prompts.
+    const env: Record<string, string | undefined> = { ...process.env, CLAUDE_CODE_INTERACTIVE: '0' }
+    delete env['CLAUDECODE']
+
     const proc = spawn(this.bin, args, {
       cwd: input.workspaceDir,
-      env: {
-        ...process.env,
-        // Ensure the claude CLI doesn't prompt for anything
-        CLAUDE_CODE_INTERACTIVE: '0',
-      },
+      env,
       // Do NOT use shell — prevents injection via user message
       shell: false,
+      // stdin must be 'ignore' (maps to /dev/null) — if left as the default
+      // pipe, claude blocks waiting for stdin input before making API calls.
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
 
     let textBuffer = ''
@@ -184,7 +188,9 @@ export function buildClaudeArgs(input: RunInput): string[] {
     args.push('--model', input.model)
   }
 
-  if (input.claudeSessionId) {
+  // Only resume if the session ID looks like a real Claude session ID (UUID-like).
+  // Prevents passing invalid IDs from other runners (e.g. Ollama stores the session key).
+  if (input.claudeSessionId && /^[0-9a-f-]{20,}$/i.test(input.claudeSessionId)) {
     args.push('--resume', input.claudeSessionId)
   }
 

@@ -105,6 +105,8 @@ export class RouterCore {
       logger.info('[router]', `${route.agentName}: budget downgrade → ${effectiveModel}`)
     }
 
+    logger.info('[router]', `${route.agentName} ← ${userId}`)
+
     try {
       const result = await route.runner.run({
         agentName: route.agentName,
@@ -153,6 +155,8 @@ export class RouterCore {
           timestampMs: Date.now(),
         })
       }
+
+      logger.info('[router]', `${route.agentName} → ${userId} (${result.costUsd !== undefined ? `$${result.costUsd.toFixed(4)}` : 'no cost'})`)
 
       await route.channel.send(msg.source, {
         text: result.output,
