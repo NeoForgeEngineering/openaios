@@ -4,6 +4,8 @@
     "rootDir": "src",
     "outDir": "dist",
     "composite": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
     "paths": {
       "@openaios/core": ["../core/src/index.ts"],
       "@openaios/runner": ["../runner/src/index.ts"],

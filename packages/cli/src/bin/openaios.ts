@@ -5,6 +5,7 @@ import { statusCommand } from '../commands/status.js'
 import { initCommand } from '../commands/init.js'
 import { upgradeCommand } from '../commands/upgrade.js'
 import { auditCommand } from '../commands/audit.js'
+import { tuiCommand } from '../commands/tui.js'
 import {
   serviceInstallCommand,
   serviceUninstallCommand,
@@ -59,6 +60,14 @@ program
   .option('-c, --config <path>', 'Path to openAIOS.yml', 'openAIOS.yml')
   .action(async (opts: { config: string }) => {
     await auditCommand(opts).catch(fatal)
+  })
+
+program
+  .command('tui')
+  .description('Terminal UI — monitor and configure agents')
+  .option('-c, --config <path>', 'Config file path')
+  .action(async (opts: { config?: string }) => {
+    await tuiCommand(opts).catch(fatal)
   })
 
 // ── service subcommands ───────────────────────────────────────────────────────

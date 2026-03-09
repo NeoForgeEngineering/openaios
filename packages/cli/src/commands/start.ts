@@ -1,4 +1,5 @@
 import { resolve, join } from 'node:path'
+import { homedir } from 'node:os'
 import { existsSync, readFileSync, mkdirSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
@@ -12,15 +13,18 @@ import { TelegramAdapter, WebhookAdapter } from '@openaios/channels'
 import type { AgentRoute } from '@openaios/router'
 import { DashboardServer } from '../dashboard/server.js'
 import { SecurityAuditor } from '../audit/auditor.js'
+import { patchAgentInConfig } from '../dashboard/config-writer.js'
+import type { AgentPatch } from '../dashboard/config-writer.js'
 
 export async function startCommand(options: { config?: string; dataDir?: string }): Promise<void> {
-  const config = loadConfig(options.config)
+  const configPath = resolve(options.config ?? process.env['OPENAIOS_CONFIG'] ?? 'openAIOS.yml')
+  const config = loadConfig(configPath)
 
   const dataDir = resolve(options.dataDir ?? config.data.dir)
   const workspacesDir = join(dataDir, '..', 'workspaces')
   const memoryDir = resolve(config.memory.dir)
 
-  logger.info('[openaios]', `Starting with config: ${options.config ?? 'openAIOS.yml'}`)
+  logger.info('[openaios]', `Starting with config: ${configPath}`)
   logger.info('[openaios]', `Data dir: ${dataDir}`)
 
   // Ensure memory directory exists
@@ -150,26 +154,51 @@ export async function startCommand(options: { config?: string; dataDir?: string 
     'Use Read/Write/Grep tools on .md files there to store and recall information across sessions.',
   ].join('\n')
 
+  // Skills dir (resolve ~ to home directory)
+  const skillsDir = config.skills.dir.replace(/^~/, homedir())
+
   // Build routes
   const providers = config.models?.providers ?? {}
   const routes: AgentRoute[] = []
   const agentModels = new Map<string, string>()
+  const runnersByAgent = new Map<string, import('@openaios/core').RunnerAdapter>()
 
   for (const agent of config.agents) {
     const basePersona = resolvePersona(agent.persona)
-    const systemPrompt = basePersona + memoryPromptSuffix
+
+    // Load skill content into system prompt
+    const skillsSuffix = agent.skills
+      .map((skillName) => {
+        const skillPath = join(skillsDir, skillName, 'SKILL.md')
+        try {
+          return '\n\n' + readFileSync(skillPath, 'utf-8')
+        } catch {
+          logger.warn('[openaios]', `Skill "${skillName}" not found at ${skillPath}`)
+          return ''
+        }
+      })
+      .join('')
+
+    const systemPrompt = basePersona + memoryPromptSuffix + skillsSuffix
     const runner = createRunner(agent.model.default, providers, agent.runner, {
       ...(orchestrator !== undefined && { orchestrator }),
       agentName: agent.name,
     })
 
     agentModels.set(agent.name, agent.model.default)
+    runnersByAgent.set(agent.name, runner)
 
     // Auto-add call_agent to allowedTools when agent-calls is configured
     const agentCallsTools =
       agent.capabilities['agent-calls'].length > 0 ? ['call_agent'] : []
 
-    const allowedTools = [...agent.permissions.allow, ...agentCallsTools]
+    // Auto-add Bash(agent-browser:*) for native agents with browser capability
+    const browserTools =
+      agent.capabilities.browser && agent.runner.mode === 'native'
+        ? ['Bash(agent-browser:*)']
+        : []
+
+    const allowedTools = [...agent.permissions.allow, ...agentCallsTools, ...browserTools]
 
     // Register on the bus regardless of runner mode
     bus.register(agent.name, {
@@ -235,6 +264,44 @@ export async function startCommand(options: { config?: string; dataDir?: string 
     bus,
   })
 
+  const onAgentUpdate = (agentName: string, patch: AgentPatch): void => {
+    patchAgentInConfig(configPath, agentName, patch)
+
+    const freshConfig = loadConfig(configPath)
+    const agentCfg = freshConfig.agents.find((a) => a.name === agentName)
+    if (!agentCfg) return
+
+    const basePersona = resolvePersona(agentCfg.persona)
+    const skillsSuffix = agentCfg.skills
+      .map((skillName) => {
+        const skillPath = join(skillsDir, skillName, 'SKILL.md')
+        try { return '\n\n' + readFileSync(skillPath, 'utf-8') } catch { return '' }
+      })
+      .join('')
+    const systemPrompt = basePersona + memoryPromptSuffix + skillsSuffix
+    const agentCallsTools = agentCfg.capabilities['agent-calls'].length > 0 ? ['call_agent'] : []
+    const browserTools =
+      agentCfg.capabilities.browser && agentCfg.runner.mode === 'native'
+        ? ['Bash(agent-browser:*)'] : []
+    const allowedTools = [...agentCfg.permissions.allow, ...agentCallsTools, ...browserTools]
+
+    router.updateRoute(agentName, { systemPrompt, allowedTools, deniedTools: agentCfg.permissions.deny })
+
+    const existingRunner = runnersByAgent.get(agentName)
+    if (existingRunner) {
+      bus.register(agentName, {
+        runner: existingRunner,
+        systemPrompt,
+        defaultModel: agentCfg.model.default,
+        allowedTools,
+        deniedTools: agentCfg.permissions.deny,
+        workspacesDir,
+        allowedCallees: agentCfg.capabilities['agent-calls'],
+      })
+    }
+    logger.info('[openaios]', `Hot-reloaded agent "${agentName}"`)
+  }
+
   // --- Dashboard ---
   const dashboardServer = new DashboardServer({
     server: httpServer,
@@ -242,6 +309,9 @@ export async function startCommand(options: { config?: string; dataDir?: string 
     budgetManager: budget,
     config,
     agentModels,
+    configPath,
+    skillsDir,
+    onAgentUpdate,
   })
   dashboardServer.register()
 

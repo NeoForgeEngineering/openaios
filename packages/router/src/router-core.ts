@@ -57,6 +57,19 @@ export class RouterCore {
     }
   }
 
+  updateRoute(
+    agentName: string,
+    patch: { systemPrompt?: string; allowedTools?: string[]; deniedTools?: string[] }
+  ): void {
+    for (const route of this.routesByChannel.values()) {
+      if (route.agentName === agentName) {
+        if (patch.systemPrompt !== undefined) route.systemPrompt = patch.systemPrompt
+        if (patch.allowedTools !== undefined) route.allowedTools = patch.allowedTools
+        if (patch.deniedTools !== undefined) route.deniedTools = patch.deniedTools
+      }
+    }
+  }
+
   async start(): Promise<void> {
     await Promise.all(this.opts.routes.map((r) => r.channel.start()))
     logger.info('[router]', `Started ${this.opts.routes.length} agent(s)`)

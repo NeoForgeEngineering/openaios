@@ -1,10 +1,14 @@
 import type { Server, IncomingMessage, ServerResponse } from 'node:http'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import type { Config } from '@openaios/core'
 import { logger } from '@openaios/core'
 import type { SessionStore } from '@openaios/core'
 import type { BudgetManager } from '@openaios/budget'
 import type { AuditResult } from '../audit/auditor.js'
 import { DASHBOARD_HTML } from './html.js'
+import { patchAgentInConfig } from './config-writer.js'
+import type { AgentPatch } from './config-writer.js'
 
 export interface DashboardServerOptions {
   server: Server
@@ -13,6 +17,12 @@ export interface DashboardServerOptions {
   config: Config
   /** Map of agentName → defaultModel */
   agentModels: Map<string, string>
+  /** Absolute path to config file (for hot-reload) */
+  configPath: string
+  /** Directory containing skill subdirectories */
+  skillsDir: string
+  /** Called after config file is patched — updates live routes */
+  onAgentUpdate: (agentName: string, patch: AgentPatch) => void
 }
 
 const startTime = Date.now()
@@ -76,6 +86,22 @@ export class DashboardServer {
 
     if (url === '/api/audit') {
       this.handleAudit(res)
+      return
+    }
+
+    if (url === '/api/config') {
+      this.handleConfig(res)
+      return
+    }
+
+    if (url === '/api/skills') {
+      this.handleSkills(res)
+      return
+    }
+
+    const patchMatch = url.match(/^\/api\/config\/agents\/([^/]+)$/)
+    if (patchMatch && req.method === 'PATCH') {
+      await this.handleAgentPatch(req, res, patchMatch[1]!)
       return
     }
 
@@ -157,6 +183,96 @@ export class DashboardServer {
       this.sseClients.delete(res)
       unsubscribe()
     })
+  }
+
+  private handleConfig(res: ServerResponse): void {
+    const { config } = this.opts
+    const agents = config.agents.map((a) => ({
+      name: a.name,
+      persona: a.persona,
+      skills: a.skills,
+      capabilities: a.capabilities,
+      permissions: a.permissions,
+    }))
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ agents }))
+  }
+
+  private handleSkills(res: ServerResponse): void {
+    const { skillsDir } = this.opts
+    const skills: { name: string; description: string }[] = []
+    try {
+      const entries = readdirSync(skillsDir)
+      for (const name of entries) {
+        const skillMd = join(skillsDir, name, 'SKILL.md')
+        try {
+          const stat = statSync(join(skillsDir, name))
+          if (!stat.isDirectory()) continue
+          const content = readFileSync(skillMd, 'utf-8')
+          const firstLine = content.split('\n').find((l) => l.trim().length > 0) ?? ''
+          skills.push({ name, description: firstLine.replace(/^#+\s*/, '').trim() })
+        } catch {
+          // skip
+        }
+      }
+    } catch {
+      // skills dir doesn't exist yet
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ skills }))
+  }
+
+  private async handleAgentPatch(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string
+  ): Promise<void> {
+    let body = ''
+    req.setEncoding('utf-8')
+    await new Promise<void>((resolve) => {
+      req.on('data', (chunk: string) => { body += chunk })
+      req.on('end', resolve)
+    })
+
+    let parsed: {
+      persona?: string
+      skills?: string[]
+      capabilities?: { browser?: boolean }
+      permissions?: { allow?: string[]; deny?: string[] }
+    }
+    try {
+      parsed = JSON.parse(body) as typeof parsed
+    } catch {
+      res.writeHead(400).end('Invalid JSON')
+      return
+    }
+
+    const patch: AgentPatch = {
+      ...(parsed.persona !== undefined && { persona: parsed.persona }),
+      ...(parsed.skills !== undefined && { skills: parsed.skills }),
+      ...(parsed.capabilities?.browser !== undefined && { browser: parsed.capabilities.browser }),
+      ...(parsed.permissions?.allow !== undefined && { allowedTools: parsed.permissions.allow }),
+      ...(parsed.permissions?.deny !== undefined && { deniedTools: parsed.permissions.deny }),
+    }
+
+    try {
+      patchAgentInConfig(this.opts.configPath, agentName, patch)
+      this.opts.onAgentUpdate(agentName, patch)
+      // Update our local config snapshot so GET /api/config reflects latest
+      const agent = this.opts.config.agents.find((a) => a.name === agentName)
+      if (agent) {
+        if (patch.persona !== undefined) agent.persona = patch.persona
+        if (patch.skills !== undefined) agent.skills = patch.skills
+        if (patch.allowedTools !== undefined) agent.permissions.allow = patch.allowedTools
+        if (patch.deniedTools !== undefined) agent.permissions.deny = patch.deniedTools
+        if (patch.browser !== undefined) agent.capabilities.browser = patch.browser
+      }
+      res.writeHead(204).end()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      logger.error('[dashboard]', `Agent patch failed: ${msg}`)
+      res.writeHead(500).end(msg)
+    }
   }
 
   private handleAudit(res: ServerResponse): void {
