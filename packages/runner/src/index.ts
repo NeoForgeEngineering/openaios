@@ -11,5 +11,3 @@ export {
 } from './docker/index.js'
 export type { CreateRunnerOptions } from './factory.js'
 export { createRunner } from './factory.js'
-export { OllamaRunner } from './ollama/runner.js'
-export { OpenAICompatRunner } from './openai-compat/runner.js'
