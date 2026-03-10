@@ -1,6 +1,6 @@
+import type { BudgetManager } from '@openaios/budget'
 import type { Config, SessionStore } from '@openaios/core'
 import { logger } from '@openaios/core'
-import type { BudgetManager } from '@openaios/budget'
 
 export interface AuditFinding {
   agentName: string | 'system'
@@ -50,6 +50,7 @@ export class SecurityAuditor {
     this.checkWebhookSecurity(findings)
     this.checkAgentCallGovernance(findings)
     this.checkCircularAgentCalls(findings)
+    this.checkNativeSafeguard(findings)
 
     // Dynamic checks
     await this.checkBudgetAcceleration(findings)
@@ -60,7 +61,7 @@ export class SecurityAuditor {
     const warned = findings.filter((f) => f.severity === 'WARN').length
     const errors = findings.filter((f) => f.severity === 'ERROR').length
     // Count checks that were checked but found no issues
-    const totalChecks = 8
+    const totalChecks = 9
     const passed = totalChecks - (warned > 0 ? 1 : 0) - (errors > 0 ? 1 : 0)
 
     const result: AuditResult = {
@@ -71,7 +72,10 @@ export class SecurityAuditor {
       errors,
     }
 
-    logger.debug('[audit]', `Audit complete: ${result.passed} passed, ${warned} warned, ${errors} errors`)
+    logger.debug(
+      '[audit]',
+      `Audit complete: ${result.passed} passed, ${warned} warned, ${errors} errors`,
+    )
     return result
   }
 
@@ -114,7 +118,11 @@ export class SecurityAuditor {
     const bind = this.config.network.bind
     const isPublic = bind !== 'localhost' && bind !== '127.0.0.1'
     for (const agent of this.config.agents) {
-      if (agent.channels.webhook && !agent.channels.webhook.secret && isPublic) {
+      if (
+        agent.channels.webhook &&
+        !agent.channels.webhook.secret &&
+        isPublic
+      ) {
         findings.push({
           agentName: agent.name,
           severity: 'WARN',
@@ -161,9 +169,44 @@ export class SecurityAuditor {
     }
   }
 
+  private checkNativeSafeguard(findings: AuditFinding[]): void {
+    for (const agent of this.config.agents) {
+      if (
+        agent.runner.env === 'native' &&
+        !agent.runner.native?.allow_host_access
+      ) {
+        findings.push({
+          agentName: agent.name,
+          severity: 'WARN',
+          code: 'NATIVE_NOT_EXPLICIT',
+          message:
+            `Agent runs in native mode but runner.native.allow_host_access is not set. ` +
+            `Native agents have direct access to the host filesystem and processes. ` +
+            `Add runner.native: { allow_host_access: true } to acknowledge this.`,
+        })
+      }
+      if (
+        agent.runner.llm !== 'claude-code' &&
+        !agent.runner.llm_config?.base_url
+      ) {
+        findings.push({
+          agentName: agent.name,
+          severity: 'ERROR',
+          code: 'LLM_GATEWAY_MISSING',
+          message:
+            `runner.llm is "${agent.runner.llm}" but runner.llm_config.base_url is not set. ` +
+            `Non-claude-code LLMs require a gateway (e.g. LiteLLM) that translates to ` +
+            `Anthropic API format.`,
+        })
+      }
+    }
+  }
+
   // ── Dynamic checks ─────────────────────────────────────────────────────────
 
-  private async checkBudgetAcceleration(findings: AuditFinding[]): Promise<void> {
+  private async checkBudgetAcceleration(
+    _findings: AuditFinding[],
+  ): Promise<void> {
     // Simple heuristic: compare current period spend vs the configured limit
     // Full multi-period comparison would require more DB queries; skip for now
     // This is a placeholder for a more sophisticated check
@@ -207,9 +250,9 @@ export class SecurityAuditor {
 
   private checkGovernanceDenialSpike(findings: AuditFinding[]): void {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
-    const recentEntries = logger.getRecent().filter(
-      (e) => e.level === 'warn' && e.ts > oneHourAgo
-    )
+    const recentEntries = logger
+      .getRecent()
+      .filter((e) => e.level === 'warn' && e.ts > oneHourAgo)
 
     // Count governance denial log entries per agent
     const denialCounts = new Map<string, number>()
@@ -217,8 +260,14 @@ export class SecurityAuditor {
       if (entry.msg.includes('denied') || entry.msg.includes('blocked')) {
         // Try to extract agent name from tag or message
         for (const agent of this.config.agents) {
-          if (entry.msg.includes(agent.name) || entry.tag.includes(agent.name)) {
-            denialCounts.set(agent.name, (denialCounts.get(agent.name) ?? 0) + 1)
+          if (
+            entry.msg.includes(agent.name) ||
+            entry.tag.includes(agent.name)
+          ) {
+            denialCounts.set(
+              agent.name,
+              (denialCounts.get(agent.name) ?? 0) + 1,
+            )
           }
         }
       }

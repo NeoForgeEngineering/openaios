@@ -37,8 +37,10 @@ export type {
   AgentCapabilities,
   AgentDefinition,
   Config,
+  LlmConfig,
   ModelProviders,
   RunnerConfig,
+  RunnerLlm,
 } from './schema/config.js'
 // Config schema
 export { ConfigSchema } from './schema/config.js'

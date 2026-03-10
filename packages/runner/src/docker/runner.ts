@@ -34,6 +34,8 @@ export interface DockerRunnerOptions {
   containerConfig?: DockerContainerConfig
   /** Path to the claude binary inside the container. Defaults to 'claude'. */
   bin?: string
+  /** Extra env vars injected via docker exec -e (e.g. ANTHROPIC_BASE_URL) */
+  llmEnv?: Record<string, string>
 }
 
 /**
@@ -48,6 +50,7 @@ export class DockerRunner implements RunnerAdapter {
   private readonly orchestrator: ContainerOrchestrator
   private readonly containerConfig: DockerContainerConfig
   private readonly bin: string
+  private readonly llmEnv: Record<string, string>
   /** sessionKey → claude Code session ID for --resume */
   private readonly sessions = new Map<string, string>()
 
@@ -56,6 +59,7 @@ export class DockerRunner implements RunnerAdapter {
     this.orchestrator = opts.orchestrator
     this.containerConfig = opts.containerConfig ?? {}
     this.bin = opts.bin ?? 'claude'
+    this.llmEnv = opts.llmEnv ?? {}
   }
 
   async run(input: RunInput): Promise<RunResult> {
@@ -86,9 +90,16 @@ export class DockerRunner implements RunnerAdapter {
       ...(resumeId !== undefined && { resumeId }),
     })
 
-    // Execute: docker exec <container> claude <args...>
+    // Build -e flags for LLM env vars
+    const envFlags: string[] = []
+    for (const [key, value] of Object.entries(this.llmEnv)) {
+      envFlags.push('-e', `${key}=${value}`)
+    }
+
+    // Execute: docker exec [-e KEY=VALUE ...] <container> claude <args...>
     const dockerArgs = [
       'exec',
+      ...envFlags,
       `openaios-${this.config.agentName}`,
       this.bin,
       ...claudeArgs,

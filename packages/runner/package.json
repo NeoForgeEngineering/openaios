@@ -16,13 +16,14 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist *.tsbuildinfo",
-    "test": "node --test src/__tests__/**/*.test.ts"
+    "test": "tsx --test 'src/__tests__/**/*.test.ts'"
   },
   "dependencies": {
     "@openaios/core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.5.0"
   },
   "peerDependencies": {

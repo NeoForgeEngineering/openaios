@@ -13,6 +13,8 @@ import type {
 interface ClaudeCodeRunnerOptions {
   /** Path to the claude binary. Defaults to 'claude' (searched in PATH). */
   bin?: string
+  /** Extra env vars injected into claude process (e.g. ANTHROPIC_BASE_URL for alternative LLMs) */
+  llmEnv?: Record<string, string>
 }
 
 // Message types emitted by `claude --output-format stream-json --verbose`
@@ -38,12 +40,14 @@ export class ClaudeCodeRunner implements RunnerAdapter {
   readonly env = 'native' as const
   private config: AgentConfig
   private readonly bin: string
+  private readonly llmEnv: Record<string, string>
   /** sessionKey → claude Code session ID for --resume */
   private readonly sessions = new Map<string, string>()
 
   constructor(config: AgentConfig, options: ClaudeCodeRunnerOptions = {}) {
     this.config = config
     this.bin = options.bin ?? 'claude'
+    this.llmEnv = options.llmEnv ?? {}
   }
 
   async run(input: RunInput): Promise<RunResult> {
@@ -78,6 +82,7 @@ export class ClaudeCodeRunner implements RunnerAdapter {
     const env: Record<string, string | undefined> = {
       ...process.env,
       CLAUDE_CODE_INTERACTIVE: '0',
+      ...this.llmEnv,
     }
     delete env.CLAUDECODE
 

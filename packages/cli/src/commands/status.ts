@@ -17,7 +17,7 @@ export async function statusCommand(options: {
   // Runner health checks
   console.log('Runners:')
   for (const agent of config.agents) {
-    if (agent.runner.mode === 'docker') {
+    if (agent.runner.env === 'docker') {
       console.log(
         `  - ${agent.name} (${agent.model.default}) — docker mode, health check skipped`,
       )

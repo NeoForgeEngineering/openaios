@@ -20,17 +20,41 @@ const AgentPermissionsSchema = z.object({
   deny: z.array(z.string()).default([]),
 })
 
+// LLM runtime type
+const RunnerLlmSchema = z
+  .enum(['claude-code', 'openai-compat', 'gemini', 'ollama'])
+  .default('claude-code')
+
+/** Config passed to claude CLI via env vars for non-claude-code LLMs */
+const LlmConfigSchema = z.object({
+  /** ANTHROPIC_BASE_URL — points to Anthropic-compat gateway (LiteLLM, claude-code-router, etc) */
+  base_url: z.string(),
+  /** ANTHROPIC_AUTH_TOKEN — API key for the gateway */
+  api_key: z.string().optional(),
+})
+
+/** Explicit opt-in required for native mode (agents run on host — broader access) */
+const NativeSafeguardSchema = z.object({
+  allow_host_access: z.literal(true),
+})
+
+const DockerContainerConfigSchema = z.object({
+  image: z.string().default('node:22-slim'),
+  memory: z.string().optional(), // e.g. "512m"
+  cpus: z.number().optional(),
+})
+
 const RunnerConfigSchema = z.object({
-  /** Execution mode for this agent's runner */
-  mode: z.enum(['docker', 'native']).default('docker'),
-  /** Docker config — only used when mode is 'docker' */
-  docker: z
-    .object({
-      image: z.string().default('node:22-slim'),
-      memory: z.string().optional(), // e.g. "512m"
-      cpus: z.number().optional(),
-    })
-    .optional(),
+  /** WHERE the agent runs */
+  env: z.enum(['docker', 'native']).default('docker'),
+  /** WHICH LLM drives the agentic loop */
+  llm: RunnerLlmSchema,
+  /** Gateway config — required when llm !== 'claude-code' */
+  llm_config: LlmConfigSchema.optional(),
+  /** Must be set to explicitly allow native agents to access the host */
+  native: NativeSafeguardSchema.optional(),
+  /** Docker container config */
+  docker: DockerContainerConfigSchema.optional(),
 })
 
 const AgentModelSchema = z.object({
@@ -203,6 +227,8 @@ export type Config = z.infer<typeof ConfigSchema>
 export type AgentDefinition = z.infer<typeof AgentSchema>
 export type AgentBudgetConfig = z.infer<typeof AgentBudgetSchema>
 export type RunnerConfig = z.infer<typeof RunnerConfigSchema>
+export type RunnerLlm = z.infer<typeof RunnerLlmSchema>
+export type LlmConfig = z.infer<typeof LlmConfigSchema>
 export type ModelProviders = z.infer<typeof ModelProvidersSchema>
 export type AgentCapabilities = z.infer<typeof CapabilitiesSchema>
 export type SkillsConfig = z.infer<typeof SkillsSchema>

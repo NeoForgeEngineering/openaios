@@ -78,7 +78,7 @@ export async function startCommand(options: {
   })
 
   // Detect if any agent needs docker mode
-  const hasDockerAgents = config.agents.some((a) => a.runner.mode === 'docker')
+  const hasDockerAgents = config.agents.some((a) => a.runner.env === 'docker')
 
   // --- Shared HTTP server (dashboard + webhook channels) ---
   const httpServer = createServer()
@@ -205,7 +205,7 @@ export async function startCommand(options: {
 
     // Start containers for all docker-mode agents up front
     for (const agent of config.agents) {
-      if (agent.runner.mode === 'docker') {
+      if (agent.runner.env === 'docker') {
         await orchestrator.ensureRunning(agent.name, agent.runner.docker)
       }
     }
@@ -214,7 +214,7 @@ export async function startCommand(options: {
   // Provision capabilities for all agents
   if (provisioner) {
     for (const agent of config.agents) {
-      if (agent.runner.mode === 'docker') {
+      if (agent.runner.env === 'docker') {
         await provisioner.provision(agent.name, agent.capabilities)
       }
     }
@@ -473,7 +473,7 @@ function buildAgentConfig(opts: {
 
   // Auto-add Bash(agent-browser:*) for native agents with browser capability
   const browserTools =
-    agent.capabilities.browser && agent.runner.mode === 'native'
+    agent.capabilities.browser && agent.runner.env === 'native'
       ? ['Bash(agent-browser:*)']
       : []
 

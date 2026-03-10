@@ -1,11 +1,12 @@
-import React from 'react'
 import { Box, Text } from 'ink'
+import type React from 'react'
 import { useApiPolling } from '../hooks/useApi.js'
 
 interface AgentStatus {
   name: string
   model: string
-  runnerMode: string
+  runnerEnv: string
+  runnerLlm: string
   sessionCount: number
   budget?: {
     spentUsd: number
@@ -31,7 +32,11 @@ function formatUptime(s: number): string {
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
 }
 
-export function StatusPanel({ baseUrl }: { baseUrl: string }): React.ReactElement {
+export function StatusPanel({
+  baseUrl,
+}: {
+  baseUrl: string
+}): React.ReactElement {
   const data = useApiPolling<StatusData>(`${baseUrl}/api/status`, 3000)
 
   if (!data) {
@@ -42,16 +47,37 @@ export function StatusPanel({ baseUrl }: { baseUrl: string }): React.ReactElemen
     <Box flexDirection="column" gap={1}>
       <Text color="gray">uptime: {formatUptime(data.uptime)}</Text>
       {data.agents.map((a) => (
-        <Box key={a.name} flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1}>
-          <Text bold color="white">{a.name}</Text>
-          <Text color="gray">{a.model}  [{a.runnerMode}]  sessions: {a.sessionCount}</Text>
+        <Box
+          key={a.name}
+          flexDirection="column"
+          borderStyle="single"
+          borderColor="gray"
+          paddingX={1}
+        >
+          <Text bold color="white">
+            {a.name}
+          </Text>
+          <Text color="gray">
+            {a.model} {a.runnerEnv === 'native' ? '[HOST]' : '[DOCKER]'}{' '}
+            {a.runnerLlm} sessions: {a.sessionCount}
+          </Text>
           {a.budget && (
             <Box flexDirection="column">
-              <Text color={a.budget.fraction >= 1 ? 'red' : a.budget.isWarning ? 'yellow' : 'green'}>
-                {budgetBar(a.budget.fraction)} {(a.budget.fraction * 100).toFixed(1)}%
+              <Text
+                color={
+                  a.budget.fraction >= 1
+                    ? 'red'
+                    : a.budget.isWarning
+                      ? 'yellow'
+                      : 'green'
+                }
+              >
+                {budgetBar(a.budget.fraction)}{' '}
+                {(a.budget.fraction * 100).toFixed(1)}%
               </Text>
               <Text color="gray">
-                ${a.budget.spentUsd.toFixed(4)} / ${a.budget.limitUsd.toFixed(2)}
+                ${a.budget.spentUsd.toFixed(4)} / $
+                {a.budget.limitUsd.toFixed(2)}
               </Text>
             </Box>
           )}

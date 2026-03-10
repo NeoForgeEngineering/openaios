@@ -128,7 +128,8 @@ export class DashboardServer {
         return {
           name: a.name,
           model: a.model.default,
-          runnerMode: a.runner.mode,
+          runnerEnv: a.runner.env,
+          runnerLlm: a.runner.llm,
           sessionCount: sessions.length,
           ...(bs && {
             budget: {
