@@ -1,0 +1,61 @@
+---
+title: openAIOS
+description: Model-agnostic, secure-by-default AI agent orchestration OS
+template: splash
+hero:
+  tagline: Connect any AI model to any channel with built-in governance, budget tracking, and governed inter-agent communication.
+  actions:
+    - text: Get Started
+      link: /openaios/getting-started/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/NeoForgeEngineering/openaios
+      icon: external
+sidebar:
+  hidden: true
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+  <Card title="Agent Autonomy" icon="rocket">
+    Runners are autonomous — configured once at startup, they own their session state, prompt, tools, and workspace. The router is a thin dispatcher.
+  </Card>
+
+  <Card title="Model-Agnostic" icon="puzzle">
+    Run Claude Code, Ollama, or any OpenAI-compatible model. Switch models per agent or downgrade automatically when budgets run low.
+  </Card>
+
+  <Card title="Secure by Default" icon="approve-check-circle">
+    Deny-by-default permissions. Agents get zero tools unless explicitly allowed. Budget enforcement blocks runaway spending.
+  </Card>
+
+  <Card title="Multi-Channel" icon="comment-alt">
+    Telegram, Discord, Webhook — agents connect to the channels your users already use. One config file, multiple frontends.
+  </Card>
+
+  <Card title="Governed Agent Bus" icon="random">
+    Agents call other agents through a two-layer authorization system with budget tracking and circular call detection.
+  </Card>
+
+  <Card title="Docker Isolation" icon="seti:docker">
+    Run agents in long-lived containers with memory/CPU limits, private workspaces, and optional browser sidecars.
+  </Card>
+
+  <Card title="Live Dashboard + TUI" icon="laptop">
+    Web dashboard and terminal UI with live logs, agent status, config editor, and security audit. Hot-reload config without restarting.
+  </Card>
+
+  <Card title="Federation (BR Platform)" icon="star">
+    Route agent calls across nodes when using Bot Resources governance. FederatedAgentBus handles cross-node routing with per-peer token auth.
+  </Card>
+
+  <Card title="Skills" icon="document">
+    Inject OpenClaw-compatible SKILL.md files into agent system prompts. Mix and match community skills with your own.
+  </Card>
+</CardGrid>
+
+<div style="text-align: center; margin-top: 2rem;">
+  <img src="/openaios/architecture.svg" alt="openAIOS Architecture" style="max-width: 100%; border-radius: 12px; border: 1px solid #2a3242;" />
+</div>

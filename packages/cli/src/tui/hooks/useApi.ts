@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
 import type { LogEntry } from '@openaios/core'
+import { useEffect, useState } from 'react'
 
 export function useApiPolling<T>(url: string, intervalMs = 3000): T | null {
   const [data, setData] = useState<T | null>(null)
@@ -10,8 +10,12 @@ export function useApiPolling<T>(url: string, intervalMs = 3000): T | null {
     const fetchData = () => {
       fetch(url)
         .then((r) => r.json() as Promise<T>)
-        .then((d) => { if (!cancelled) setData(d) })
-        .catch(() => {/* ignore */})
+        .then((d) => {
+          if (!cancelled) setData(d)
+        })
+        .catch(() => {
+          /* ignore */
+        })
     }
 
     fetchData()
@@ -34,8 +38,12 @@ export function useApiLogs(baseUrl: string): LogEntry[] {
     const fetchLogs = () => {
       fetch(`${baseUrl}/api/logs`)
         .then((r) => r.json() as Promise<{ entries: LogEntry[] }>)
-        .then((d) => { if (!cancelled) setLogs(d.entries?.slice(-50) ?? []) })
-        .catch(() => {/* ignore */})
+        .then((d) => {
+          if (!cancelled) setLogs(d.entries?.slice(-50) ?? [])
+        })
+        .catch(() => {
+          /* ignore */
+        })
     }
 
     fetchLogs()

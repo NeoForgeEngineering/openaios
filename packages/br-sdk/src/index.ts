@@ -1,2 +1,7 @@
+export type {
+  BRAgentInfo,
+  BRClientOptions,
+  BRPolicyRule,
+  BRUsageReport,
+} from './client.js'
 export { BRClient } from './client.js'
-export type { BRClientOptions, BRAgentInfo, BRUsageReport, BRPolicyRule } from './client.js'

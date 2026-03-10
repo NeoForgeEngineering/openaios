@@ -1,13 +1,20 @@
 import { execSync, spawnSync } from 'node:child_process'
-import { writeFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
-import { resolve, dirname } from 'node:path'
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
+import { homedir, platform } from 'node:os'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { platform, homedir } from 'node:os'
 import { logger } from '@openaios/core'
 
 const PLIST_LABEL = 'dev.openaios.agent'
-const PLIST_PATH = resolve(homedir(), 'Library/LaunchAgents', `${PLIST_LABEL}.plist`)
-const SYSTEMD_USER_UNIT = resolve(homedir(), '.config/systemd/user/openaios.service')
+const PLIST_PATH = resolve(
+  homedir(),
+  'Library/LaunchAgents',
+  `${PLIST_LABEL}.plist`,
+)
+const SYSTEMD_USER_UNIT = resolve(
+  homedir(),
+  '.config/systemd/user/openaios.service',
+)
 const SYSTEMD_SYSTEM_UNIT = '/etc/systemd/system/openaios.service'
 const SERVICE_NAME = 'openaios'
 
@@ -37,7 +44,10 @@ function isMacInstalled(): boolean {
 
 // ── Install ──────────────────────────────────────────────────────────────────
 
-export async function serviceInstallCommand(opts: { configDir?: string; userLevel?: boolean }): Promise<void> {
+export async function serviceInstallCommand(opts: {
+  configDir?: string
+  userLevel?: boolean
+}): Promise<void> {
   const configDir = resolve(opts.configDir ?? process.cwd())
   const entry = getEntryPoint()
   const nodeBin = process.execPath
@@ -45,7 +55,10 @@ export async function serviceInstallCommand(opts: { configDir?: string; userLeve
 
   if (!existsSync(resolve(configDir, 'openAIOS.yml'))) {
     logger.error('[openaios]', `No openAIOS.yml found in ${configDir}`)
-    logger.error('[openaios]', `Run 'openaios init' first, then re-run 'openaios service install'`)
+    logger.error(
+      '[openaios]',
+      `Run 'openaios init' first, then re-run 'openaios service install'`,
+    )
     process.exit(1)
   }
 
@@ -55,12 +68,20 @@ export async function serviceInstallCommand(opts: { configDir?: string; userLeve
     installMac(nodeBin, entry, configDir)
   } else {
     logger.error('[openaios]', 'Service install supports Linux and macOS.')
-    logger.error('[openaios]', 'On Windows: run openaios start, or set up Task Scheduler manually.')
+    logger.error(
+      '[openaios]',
+      'On Windows: run openaios start, or set up Task Scheduler manually.',
+    )
     process.exit(1)
   }
 }
 
-function installLinux(nodeBin: string, entry: string, configDir: string, userLevel: boolean): void {
+function installLinux(
+  nodeBin: string,
+  entry: string,
+  configDir: string,
+  userLevel: boolean,
+): void {
   const unit = `[Unit]
 Description=openAIOS — AI agent runtime
 After=network-online.target
@@ -88,7 +109,10 @@ WantedBy=${userLevel ? 'default.target' : 'multi-user.target'}
     exec('systemctl --user daemon-reload')
     exec('systemctl --user enable --now openaios.service')
     logger.info('[openaios]', '✓ Service installed (user systemd)')
-    logger.info('[openaios]', '  Manage:  systemctl --user start|stop|restart|status openaios')
+    logger.info(
+      '[openaios]',
+      '  Manage:  systemctl --user start|stop|restart|status openaios',
+    )
     logger.info('[openaios]', '  Logs:    journalctl --user -u openaios -f')
   } else {
     // Try writing directly, fall back to sudo
@@ -102,7 +126,10 @@ WantedBy=${userLevel ? 'default.target' : 'multi-user.target'}
     exec('sudo systemctl daemon-reload')
     exec(`sudo systemctl enable --now ${SERVICE_NAME}.service`)
     logger.info('[openaios]', '✓ Service installed (system systemd)')
-    logger.info('[openaios]', '  Manage:  sudo systemctl start|stop|restart|status openaios')
+    logger.info(
+      '[openaios]',
+      '  Manage:  sudo systemctl start|stop|restart|status openaios',
+    )
     logger.info('[openaios]', '  Logs:    sudo journalctl -u openaios -f')
   }
 }
@@ -154,12 +181,20 @@ export async function serviceUninstallCommand(): Promise<void> {
 
   if (os === 'linux') {
     if (isUserUnit()) {
-      try { exec('systemctl --user disable --now openaios.service') } catch { /* already stopped */ }
+      try {
+        exec('systemctl --user disable --now openaios.service')
+      } catch {
+        /* already stopped */
+      }
       unlinkSync(SYSTEMD_USER_UNIT)
       exec('systemctl --user daemon-reload')
       logger.info('[openaios]', '✓ Service removed (user systemd)')
     } else if (isSystemUnit()) {
-      try { exec(`sudo systemctl disable --now ${SERVICE_NAME}.service`) } catch { /* already stopped */ }
+      try {
+        exec(`sudo systemctl disable --now ${SERVICE_NAME}.service`)
+      } catch {
+        /* already stopped */
+      }
       exec(`sudo rm -f ${SYSTEMD_SYSTEM_UNIT}`)
       exec('sudo systemctl daemon-reload')
       logger.info('[openaios]', '✓ Service removed (system systemd)')
@@ -168,7 +203,11 @@ export async function serviceUninstallCommand(): Promise<void> {
     }
   } else if (os === 'darwin') {
     if (isMacInstalled()) {
-      try { exec(`launchctl unload "${PLIST_PATH}"`) } catch { /* already unloaded */ }
+      try {
+        exec(`launchctl unload "${PLIST_PATH}"`)
+      } catch {
+        /* already unloaded */
+      }
       unlinkSync(PLIST_PATH)
       logger.info('[openaios]', '✓ Service removed (macOS LaunchAgent)')
     } else {
@@ -222,9 +261,15 @@ export async function serviceStatusCommand(): Promise<void> {
   const os = getOS()
   if (os === 'linux') {
     const flag = isUserUnit() ? '--user' : ''
-    spawnSync(`systemctl`, [flag, 'status', `${SERVICE_NAME}.service`].filter(Boolean), { stdio: 'inherit' })
+    spawnSync(
+      `systemctl`,
+      [flag, 'status', `${SERVICE_NAME}.service`].filter(Boolean),
+      { stdio: 'inherit' },
+    )
   } else if (os === 'darwin') {
-    const result = spawnSync('launchctl', ['list', PLIST_LABEL], { encoding: 'utf-8' })
+    const result = spawnSync('launchctl', ['list', PLIST_LABEL], {
+      encoding: 'utf-8',
+    })
     if (result.status === 0) {
       process.stdout.write(result.stdout)
     } else {
@@ -235,12 +280,20 @@ export async function serviceStatusCommand(): Promise<void> {
 
 // ── Logs ──────────────────────────────────────────────────────────────────────
 
-export async function serviceLogsCommand(opts: { lines?: number }): Promise<void> {
+export async function serviceLogsCommand(opts: {
+  lines?: number
+}): Promise<void> {
   const lines = opts.lines ?? 50
   const os = getOS()
   if (os === 'linux') {
     const flag = isUserUnit() ? '--user' : ''
-    spawnSync('journalctl', [flag, '-u', SERVICE_NAME, '-n', String(lines), '--no-pager'].filter(Boolean), { stdio: 'inherit' })
+    spawnSync(
+      'journalctl',
+      [flag, '-u', SERVICE_NAME, '-n', String(lines), '--no-pager'].filter(
+        Boolean,
+      ),
+      { stdio: 'inherit' },
+    )
   } else if (os === 'darwin') {
     const logFile = resolve(homedir(), '.openaios', 'logs', 'openaios.log')
     if (existsSync(logFile)) {

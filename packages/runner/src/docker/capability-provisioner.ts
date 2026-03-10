@@ -32,16 +32,23 @@ export class CapabilityProvisioner {
    * Provision any declared capabilities for an agent.
    * Call this after the agent container is running.
    */
-  async provision(agentName: string, capabilities: AgentCapabilities): Promise<void> {
+  async provision(
+    agentName: string,
+    capabilities: AgentCapabilities,
+  ): Promise<void> {
     if (capabilities.browser) {
       await this.startBrowser(agentName)
       // Write CDP_URL into the agent container's /workspace/.env.capabilities
       const cdpUrl = `http://${this.browserContainerName(agentName)}:${BROWSER_PORT}`
       await this.orchestrator.exec(agentName, [
-        'sh', '-c',
+        'sh',
+        '-c',
         `echo 'CDP_URL=${cdpUrl}' >> /workspace/.env.capabilities`,
       ])
-      logger.info('[capability-provisioner]', `Browser sidecar ready for "${agentName}": ${cdpUrl}`)
+      logger.info(
+        '[capability-provisioner]',
+        `Browser sidecar ready for "${agentName}": ${cdpUrl}`,
+      )
       this.provisionedAgents.add(agentName)
     }
   }
@@ -52,7 +59,10 @@ export class CapabilityProvisioner {
     await this.spawnCollect('docker', ['stop', name]).catch(() => {})
     await this.spawnCollect('docker', ['rm', name]).catch(() => {})
     this.provisionedAgents.delete(agentName)
-    logger.info('[capability-provisioner]', `Deprovisioned sidecars for "${agentName}"`)
+    logger.info(
+      '[capability-provisioner]',
+      `Deprovisioned sidecars for "${agentName}"`,
+    )
   }
 
   /** Deprovision all sidecars for all provisioned agents. */
@@ -69,10 +79,14 @@ export class CapabilityProvisioner {
     if (running) return
 
     const result = await this.spawnCollect('docker', [
-      'run', '-d',
-      '--name', name,
-      '--network', 'openaios',
-      '--memory', '512m',
+      'run',
+      '-d',
+      '--name',
+      name,
+      '--network',
+      'openaios',
+      '--memory',
+      '512m',
       BROWSER_IMAGE,
       '--no-sandbox',
       '--remote-debugging-address=0.0.0.0',
@@ -81,14 +95,17 @@ export class CapabilityProvisioner {
 
     if (result.exitCode !== 0) {
       throw new Error(
-        `Failed to start browser sidecar for "${agentName}": ${result.stderr.slice(0, 500)}`
+        `Failed to start browser sidecar for "${agentName}": ${result.stderr.slice(0, 500)}`,
       )
     }
   }
 
   private async isContainerRunning(name: string): Promise<boolean> {
     const result = await this.spawnCollect('docker', [
-      'inspect', '--format', '{{.State.Running}}', name,
+      'inspect',
+      '--format',
+      '{{.State.Running}}',
+      name,
     ])
     return result.exitCode === 0 && result.stdout.trim() === 'true'
   }
@@ -100,10 +117,16 @@ export class CapabilityProvisioner {
       let stderr = ''
       proc.stdout.setEncoding('utf-8')
       proc.stderr.setEncoding('utf-8')
-      proc.stdout.on('data', (c: string) => { stdout += c })
-      proc.stderr.on('data', (c: string) => { stderr += c })
+      proc.stdout.on('data', (c: string) => {
+        stdout += c
+      })
+      proc.stderr.on('data', (c: string) => {
+        stderr += c
+      })
       proc.on('close', (exitCode) => resolve({ stdout, stderr, exitCode }))
-      proc.on('error', (err) => resolve({ stdout, stderr: err.message, exitCode: 1 }))
+      proc.on('error', (err) =>
+        resolve({ stdout, stderr: err.message, exitCode: 1 }),
+      )
     })
   }
 }

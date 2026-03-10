@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import type { Server, IncomingMessage, ServerResponse } from 'node:http'
-import type { ChannelAdapter, ChannelTarget, InboundMessage, MessageHandler, OutboundMessage } from '@openaios/core'
+import type { IncomingMessage, Server, ServerResponse } from 'node:http'
+import type {
+  ChannelAdapter,
+  ChannelTarget,
+  InboundMessage,
+  MessageHandler,
+  OutboundMessage,
+} from '@openaios/core'
 import { logger } from '@openaios/core'
 
 export interface WebhookAdapterOptions {
@@ -70,7 +76,10 @@ export class WebhookAdapter implements ChannelAdapter {
     this.handler = handler
   }
 
-  private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  private async handleRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
     if (req.method !== 'POST') {
       res.writeHead(405).end('Method Not Allowed')
       return
@@ -87,13 +96,21 @@ export class WebhookAdapter implements ChannelAdapter {
     const body = await new Promise<string>((resolve) => {
       let data = ''
       req.setEncoding('utf-8')
-      req.on('data', (chunk: string) => { data += chunk })
-      req.on('end', () => { resolve(data) })
+      req.on('data', (chunk: string) => {
+        data += chunk
+      })
+      req.on('end', () => {
+        resolve(data)
+      })
     })
 
     let parsed: { text?: string; userId?: string; messageId?: string }
     try {
-      parsed = JSON.parse(body) as { text?: string; userId?: string; messageId?: string }
+      parsed = JSON.parse(body) as {
+        text?: string
+        userId?: string
+        messageId?: string
+      }
     } catch {
       res.writeHead(400).end('Invalid JSON')
       return
@@ -110,7 +127,9 @@ export class WebhookAdapter implements ChannelAdapter {
 
     // Park the response resolver
     let responseResolve!: (msg: OutboundMessage) => void
-    const responsePromise = new Promise<OutboundMessage>((r) => { responseResolve = r })
+    const responsePromise = new Promise<OutboundMessage>((r) => {
+      responseResolve = r
+    })
     this.pending.set(requestId, responseResolve)
 
     const inbound: InboundMessage = {

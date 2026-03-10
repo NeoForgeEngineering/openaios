@@ -1,4 +1,4 @@
-import { writeFileSync, existsSync, cpSync, mkdirSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const EXAMPLE_CONFIG_PATHS = [
@@ -11,7 +11,9 @@ export async function initCommand(): Promise<void> {
   const target = resolve('openAIOS.yml')
 
   if (existsSync(target)) {
-    console.error('openAIOS.yml already exists. Remove it first to re-initialise.')
+    console.error(
+      'openAIOS.yml already exists. Remove it first to re-initialise.',
+    )
     process.exit(1)
   }
 

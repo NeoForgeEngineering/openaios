@@ -1,13 +1,13 @@
-export { startCommand } from './commands/start.js'
-export { statusCommand } from './commands/status.js'
 export { initCommand } from './commands/init.js'
-export { upgradeCommand } from './commands/upgrade.js'
 export {
   serviceInstallCommand,
-  serviceUninstallCommand,
-  serviceStartCommand,
-  serviceStopCommand,
-  serviceRestartCommand,
-  serviceStatusCommand,
   serviceLogsCommand,
+  serviceRestartCommand,
+  serviceStartCommand,
+  serviceStatusCommand,
+  serviceStopCommand,
+  serviceUninstallCommand,
 } from './commands/service.js'
+export { startCommand } from './commands/start.js'
+export { statusCommand } from './commands/status.js'
+export { upgradeCommand } from './commands/upgrade.js'

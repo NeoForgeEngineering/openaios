@@ -1,0 +1,79 @@
+direction: down
+
+title: openAIOS Hot-Reload via reconfigure() {
+  shape: text
+  style.font-size: 22
+  style.bold: true
+  near: top-center
+}
+
+user: Operator {
+  shape: person
+  style.fill: "#e94560"
+  style.font-color: "#ffffff"
+}
+
+ui: Dashboard / TUI {
+  style.fill: "#1a1a2e"
+  style.stroke: "#ff79c6"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+
+  dashboard: Web Dashboard (Configure tab)
+  tui: "openaios tui (Configure tab)"
+}
+
+api: "PATCH /api/config/agents/:name" {
+  style.fill: "#0f3460"
+  style.stroke: "#00d2ff"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+}
+
+writer: Config Writer {
+  style.fill: "#16213e"
+  style.stroke: "#f5a623"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+
+  patch: "patchAgentInConfig()" {
+    style.font-color: "#f5a623"
+  }
+  yaml: "openAIOS.yml (preserves comments)" {
+    shape: document
+    style.font-color: "#f1fa8c"
+  }
+
+  patch -> yaml: write
+}
+
+rebuild: Rebuild AgentConfig {
+  style.fill: "#0f3460"
+  style.stroke: "#50fa7b"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+
+  prompt: "1. Rebuild systemPrompt (persona + skills + memory)" {
+    style.font-color: "#00d2ff"
+  }
+  config: "2. Build new AgentConfig" {
+    style.font-color: "#f1fa8c"
+  }
+  reconfig: "3. runner.reconfigure(config)" {
+    style.font-color: "#50fa7b"
+  }
+
+  prompt -> config -> reconfig
+}
+
+result: "Runner updated — sessions preserved" {
+  shape: parallelogram
+  style.fill: "#50fa7b"
+  style.font-color: "#0d1117"
+}
+
+user -> ui: edit persona / skills / permissions
+ui -> api: PATCH request
+api -> writer: update config file
+api -> rebuild: update live runner
+rebuild -> result

@@ -1,4 +1,9 @@
-import type { ChannelAdapter, ChannelTarget, MessageHandler, OutboundMessage } from '@openaios/core'
+import type {
+  ChannelAdapter,
+  ChannelTarget,
+  MessageHandler,
+  OutboundMessage,
+} from '@openaios/core'
 
 /**
  * DiscordAdapter — Phase 7 (not yet implemented).

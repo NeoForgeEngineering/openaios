@@ -24,9 +24,9 @@ interface StopInput {
 }
 
 export async function runHook(event: HookEvent): Promise<void> {
-  const brUrl = process.env['BR_URL']
-  const brToken = process.env['BR_TOKEN']
-  const agentName = process.env['BR_AGENT'] ?? 'unknown'
+  const brUrl = process.env.BR_URL
+  const brToken = process.env.BR_TOKEN
+  const agentName = process.env.BR_AGENT ?? 'unknown'
 
   if (!brUrl || !brToken) {
     // No BR configured — exit silently (hook still succeeds)
@@ -55,8 +55,9 @@ export async function runHook(event: HookEvent): Promise<void> {
           process.stdout.write(
             JSON.stringify({
               decision: 'block',
-              reason: rule.reason ?? `Tool "${data.tool_name}" blocked by BR policy`,
-            })
+              reason:
+                rule.reason ?? `Tool "${data.tool_name}" blocked by BR policy`,
+            }),
           )
           process.exit(0)
         }
@@ -101,7 +102,9 @@ async function readStdin(): Promise<string> {
   return new Promise((resolve) => {
     let data = ''
     process.stdin.setEncoding('utf-8')
-    process.stdin.on('data', (chunk: string) => { data += chunk })
+    process.stdin.on('data', (chunk: string) => {
+      data += chunk
+    })
     process.stdin.on('end', () => resolve(data))
     // If stdin is a TTY or not connected, resolve immediately
     if (process.stdin.isTTY) resolve('')

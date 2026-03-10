@@ -1,6 +1,12 @@
-import { Bot, GrammyError, HttpError } from 'grammy'
-import type { ChannelAdapter, ChannelTarget, InboundMessage, MessageHandler, OutboundMessage } from '@openaios/core'
+import type {
+  ChannelAdapter,
+  ChannelTarget,
+  InboundMessage,
+  MessageHandler,
+  OutboundMessage,
+} from '@openaios/core'
 import { logger } from '@openaios/core'
+import { Bot, GrammyError, HttpError } from 'grammy'
 
 const MAX_TELEGRAM_MESSAGE_LENGTH = 4096
 
@@ -52,14 +58,16 @@ export class TelegramAdapter implements ChannelAdapter {
     if (this.running) return
     this.running = true
     // Start polling in the background — don't await (it runs indefinitely)
-    this.bot.start({
-      onStart: (info) => {
-        logger.info('[telegram]', `Polling as @${info.username}`)
-      },
-    }).catch((err) => {
-      logger.error('[telegram]', 'Bot crashed', err)
-      this.running = false
-    })
+    this.bot
+      .start({
+        onStart: (info) => {
+          logger.info('[telegram]', `Polling as @${info.username}`)
+        },
+      })
+      .catch((err) => {
+        logger.error('[telegram]', 'Bot crashed', err)
+        this.running = false
+      })
   }
 
   async stop(): Promise<void> {
@@ -73,23 +81,32 @@ export class TelegramAdapter implements ChannelAdapter {
     const chatId = Number(target.id)
     const text = truncate(msg.text, MAX_TELEGRAM_MESSAGE_LENGTH)
 
-    const parseMode = msg.parseMode === 'markdown'
-      ? 'Markdown'
-      : msg.parseMode === 'html'
-        ? 'HTML'
-        : undefined
+    const parseMode =
+      msg.parseMode === 'markdown'
+        ? 'Markdown'
+        : msg.parseMode === 'html'
+          ? 'HTML'
+          : undefined
 
     try {
       await this.bot.api.sendMessage(chatId, text, {
         ...(parseMode && { parse_mode: parseMode }),
-        ...(msg.replyToMessageId && { reply_parameters: { message_id: Number(msg.replyToMessageId) } }),
+        ...(msg.replyToMessageId && {
+          reply_parameters: { message_id: Number(msg.replyToMessageId) },
+        }),
         ...(target.threadId && { message_thread_id: Number(target.threadId) }),
       })
     } catch (err) {
       // Retry without parse_mode if Markdown fails (e.g. malformed output from LLM)
-      if (parseMode && err instanceof GrammyError && err.description.includes('parse')) {
+      if (
+        parseMode &&
+        err instanceof GrammyError &&
+        err.description.includes('parse')
+      ) {
         await this.bot.api.sendMessage(chatId, text, {
-          ...(msg.replyToMessageId && { reply_parameters: { message_id: Number(msg.replyToMessageId) } }),
+          ...(msg.replyToMessageId && {
+            reply_parameters: { message_id: Number(msg.replyToMessageId) },
+          }),
         })
       } else {
         throw err
@@ -104,5 +121,5 @@ export class TelegramAdapter implements ChannelAdapter {
 
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text
-  return text.slice(0, maxLength - 3) + '...'
+  return `${text.slice(0, maxLength - 3)}...`
 }

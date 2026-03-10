@@ -1,0 +1,44 @@
+:root {
+  --sl-color-accent-low: #0f3460;
+  --sl-color-accent: #00d2ff;
+  --sl-color-accent-high: #b3ecff;
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #e0e6f0;
+  --sl-color-gray-2: #b4bfcd;
+  --sl-color-gray-3: #7c8a9a;
+  --sl-color-gray-4: #4a5567;
+  --sl-color-gray-5: #2a3242;
+  --sl-color-gray-6: #1a1f2e;
+  --sl-color-black: #0d1117;
+}
+
+:root[data-theme="light"] {
+  --sl-color-accent-low: #d6f0ff;
+  --sl-color-accent: #0077b6;
+  --sl-color-accent-high: #003459;
+}
+
+.hero-banner {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.hero-banner img {
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--sl-color-gray-5);
+}
+
+.comparison-table table {
+  font-size: 0.9rem;
+}
+
+.comparison-table th {
+  background: var(--sl-color-accent-low);
+}
+
+img[src*="diagrams"] {
+  border-radius: 8px;
+  border: 1px solid var(--sl-color-gray-5);
+  margin: 1.5rem 0;
+}

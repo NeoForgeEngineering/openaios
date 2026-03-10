@@ -29,10 +29,10 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
 }
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
-  debug: '\x1b[90m',   // gray
-  info:  '\x1b[37m',   // white
-  warn:  '\x1b[33m',   // yellow
-  error: '\x1b[31m',   // red
+  debug: '\x1b[90m', // gray
+  info: '\x1b[37m', // white
+  warn: '\x1b[33m', // yellow
+  error: '\x1b[31m', // red
 }
 
 const RESET = '\x1b[0m'
@@ -69,18 +69,31 @@ class Logger {
    */
   subscribe(fn: Subscriber): () => void {
     this.subscribers.add(fn)
-    return () => { this.subscribers.delete(fn) }
+    return () => {
+      this.subscribers.delete(fn)
+    }
   }
 
-  private emit(level: LogLevel, tag: string, msg: string, meta?: unknown): void {
+  private emit(
+    level: LogLevel,
+    tag: string,
+    msg: string,
+    meta?: unknown,
+  ): void {
     if (LEVEL_ORDER[level] < LEVEL_ORDER[this.minLevel]) return
+
+    // Serialize Error objects so they don't vanish into {}
+    const serializedMeta =
+      meta instanceof Error
+        ? { message: meta.message, stack: meta.stack }
+        : meta
 
     const entry: LogEntry = {
       ts: new Date().toISOString(),
       level,
       tag,
       msg,
-      ...(meta !== undefined && { meta }),
+      ...(serializedMeta !== undefined && { meta: serializedMeta }),
     }
 
     // Append to ring buffer
@@ -94,15 +107,21 @@ class Logger {
       const color = LEVEL_COLORS[level]
       const ts = entry.ts.replace('T', ' ').replace('Z', '').slice(0, 19)
       const levelStr = level.toUpperCase().padEnd(5)
-      const metaStr = meta !== undefined ? ' ' + JSON.stringify(meta) : ''
-      process.stdout.write(`${color}${ts} ${levelStr} ${tag} ${msg}${metaStr}${RESET}\n`)
+      const metaStr = meta !== undefined ? ` ${JSON.stringify(meta)}` : ''
+      process.stdout.write(
+        `${color}${ts} ${levelStr} ${tag} ${msg}${metaStr}${RESET}\n`,
+      )
     } else {
-      process.stdout.write(JSON.stringify(entry) + '\n')
+      process.stdout.write(`${JSON.stringify(entry)}\n`)
     }
 
     // Notify subscribers
     for (const fn of this.subscribers) {
-      try { fn(entry) } catch { /* ignore subscriber errors */ }
+      try {
+        fn(entry)
+      } catch {
+        /* ignore subscriber errors */
+      }
     }
   }
 }

@@ -9,9 +9,6 @@
       "@openaios/budget": ["../budget/src/index.ts"]
     }
   },
-  "references": [
-    { "path": "../core" },
-    { "path": "../budget" }
-  ],
+  "references": [{ "path": "../core" }, { "path": "../budget" }],
   "include": ["src"]
 }

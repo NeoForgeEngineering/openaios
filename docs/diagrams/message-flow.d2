@@ -1,0 +1,96 @@
+direction: down
+
+title: openAIOS Message Flow (Agent Autonomy) {
+  shape: text
+  style.font-size: 24
+  style.bold: true
+  near: top-center
+}
+
+user: User {
+  shape: person
+  style.fill: "#e94560"
+  style.font-color: "#ffffff"
+}
+
+channel: Channel Adapter {
+  style.fill: "#1a1a2e"
+  style.stroke: "#e94560"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+
+  telegram: Telegram
+  discord: Discord
+  webhook: Webhook
+}
+
+router: "RouterCore (thin dispatcher)" {
+  style.fill: "#0f3460"
+  style.stroke: "#00d2ff"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+}
+
+preflight: Pre-flight {
+  style.fill: "#16213e"
+  style.stroke: "#f5a623"
+  style.font-color: "#ffffff"
+
+  budget: "1. Budget check" {
+    style.font-color: "#50fa7b"
+  }
+  key: "2. Build sessionKey" {
+    style.font-color: "#00d2ff"
+  }
+
+  budget -> key
+}
+
+runner: "Autonomous Runner (owns everything)" {
+  style.fill: "#0f3460"
+  style.stroke: "#50fa7b"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+
+  input: "Receives: { sessionKey, message, modelOverride? }" {
+    style.font-color: "#f1fa8c"
+  }
+  owns: "Owns: systemPrompt, tools, workspace, session state" {
+    style.font-color: "#ff79c6"
+  }
+  run: "Execute LLM turn" {
+    style.font-color: "#50fa7b"
+  }
+
+  input -> owns -> run
+}
+
+post: Post-turn (router) {
+  style.fill: "#16213e"
+  style.stroke: "#bd93f9"
+  style.font-color: "#ffffff"
+
+  record: "1. Record cost" {
+    style.font-color: "#50fa7b"
+  }
+  report: "2. Report to governance" {
+    style.font-color: "#f5a623"
+  }
+
+  record -> report
+}
+
+response: Response to User {
+  shape: parallelogram
+  style.fill: "#e94560"
+  style.font-color: "#ffffff"
+}
+
+user -> channel: sends message
+channel -> router: InboundMessage
+router -> preflight: validate
+preflight -> runner: "{ sessionKey, message, modelOverride? }"
+runner -> post: "RunResult { output, costUsd }"
+post -> channel: OutboundMessage
+channel -> response: reply
+response -> user: receives response

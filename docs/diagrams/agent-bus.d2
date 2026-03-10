@@ -1,0 +1,105 @@
+direction: down
+
+title: openAIOS Agent Bus — Inter-Agent Communication {
+  shape: text
+  style.font-size: 22
+  style.bold: true
+  near: top-center
+}
+
+agent_a: Agent A (Docker Container) {
+  style.fill: "#0f3460"
+  style.stroke: "#00d2ff"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+
+  tool: call_agent tool {
+    shape: hexagon
+    style.fill: "#16213e"
+    style.font-color: "#bd93f9"
+  }
+}
+
+bus_http: Bus HTTP Server {
+  style.fill: "#1a1a2e"
+  style.stroke: "#f5a623"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+
+  auth: "Bearer Token Auth" {
+    style.font-color: "#f5a623"
+    shape: diamond
+  }
+}
+
+bus: AgentBus {
+  style.fill: "#0f3460"
+  style.stroke: "#bd93f9"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+
+  layer1: "Layer 1: Governance Check" {
+    style.font-color: "#f5a623"
+  }
+  layer2: "Layer 2: Callee Allowlist" {
+    style.font-color: "#e94560"
+  }
+  budget: "Budget Check (callee)" {
+    style.font-color: "#50fa7b"
+  }
+  session: "Load/Save Session" {
+    style.font-color: "#00d2ff"
+  }
+
+  layer1 -> layer2 -> budget -> session
+}
+
+agent_b: Agent B (Docker Container) {
+  style.fill: "#0f3460"
+  style.stroke: "#50fa7b"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+
+  runner: "Runner.run()" {
+    shape: hexagon
+    style.fill: "#16213e"
+    style.font-color: "#50fa7b"
+  }
+}
+
+response: Response {
+  shape: parallelogram
+  style.fill: "#e94560"
+  style.font-color: "#ffffff"
+}
+
+# Flow
+agent_a.tool -> bus_http: "POST /internal/bus/message" {
+  style.stroke: "#bd93f9"
+}
+bus_http.auth -> bus: validate token {
+  style.stroke: "#f5a623"
+}
+bus -> agent_b.runner: "RunInput (callee turn)" {
+  style.stroke: "#50fa7b"
+}
+agent_b.runner -> response: RunResult
+response -> agent_a.tool: "output returned to caller" {
+  style.stroke: "#bd93f9"
+  style.stroke-dash: 3
+}
+
+# Config callout
+config: |md
+  ```yaml
+  # Agent A config
+  capabilities:
+    agent-calls: [agent-b]
+  permissions:
+    allow: [call_agent, ...]
+  ```
+| {
+  near: bottom-left
+  style.fill: "#2d2d2d"
+  style.font-color: "#f1fa8c"
+}

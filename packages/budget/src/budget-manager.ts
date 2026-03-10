@@ -1,7 +1,7 @@
-import Database from 'better-sqlite3'
-import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import type { AgentBudgetConfig } from '@openaios/core'
+import Database from 'better-sqlite3'
 
 export interface BudgetStatus {
   agentName: string
@@ -59,12 +59,24 @@ export class BudgetManager {
   /**
    * Record a completed turn's cost.
    */
-  record(agentName: string, costUsd: number, inputTokens = 0, outputTokens = 0): void {
+  record(
+    agentName: string,
+    costUsd: number,
+    inputTokens = 0,
+    outputTokens = 0,
+  ): void {
     const stmt = this.db.prepare(`
       INSERT INTO usage (agent_name, period, cost_usd, input_tokens, output_tokens, recorded_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `)
-    stmt.run(agentName, this.currentPeriod(), costUsd, inputTokens, outputTokens, Date.now())
+    stmt.run(
+      agentName,
+      this.currentPeriod(),
+      costUsd,
+      inputTokens,
+      outputTokens,
+      Date.now(),
+    )
   }
 
   /**
@@ -89,13 +101,15 @@ export class BudgetManager {
           }
         case 'downgrade':
           if (!cfg.downgrade_to) {
-            return { allowed: false, reason: 'Budget exceeded and no downgrade_to model configured' }
+            return {
+              allowed: false,
+              reason: 'Budget exceeded and no downgrade_to model configured',
+            }
           }
           return {
             allowed: true,
             effectiveModel: cfg.downgrade_to,
           }
-        case 'warn':
         default:
           return { allowed: true, effectiveModel: requestedModel }
       }
@@ -112,7 +126,7 @@ export class BudgetManager {
       .prepare(
         `SELECT COALESCE(SUM(cost_usd), 0) as total
          FROM usage
-         WHERE agent_name = ? AND period = ?`
+         WHERE agent_name = ? AND period = ?`,
       )
       .get(agentName, this.currentPeriod()) as { total: number }
     return row.total
@@ -145,7 +159,7 @@ export class BudgetManager {
    */
   allStatuses(agentModels: Record<string, string>): BudgetStatus[] {
     return Object.keys(this.agentConfigs).map((name) =>
-      this.status(name, agentModels[name] ?? 'unknown')
+      this.status(name, agentModels[name] ?? 'unknown'),
     )
   }
 
@@ -172,7 +186,6 @@ export class BudgetManager {
         const wd = String(startOfWeek.getDate()).padStart(2, '0')
         return `${wy}-W${wm}-${wd}`
       }
-      case 'monthly':
       default:
         return `${y}-${m}`
     }

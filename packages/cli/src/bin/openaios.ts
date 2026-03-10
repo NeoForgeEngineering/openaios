@@ -1,26 +1,28 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
-import { startCommand } from '../commands/start.js'
-import { statusCommand } from '../commands/status.js'
-import { initCommand } from '../commands/init.js'
-import { upgradeCommand } from '../commands/upgrade.js'
 import { auditCommand } from '../commands/audit.js'
-import { tuiCommand } from '../commands/tui.js'
+import { initCommand } from '../commands/init.js'
 import {
   serviceInstallCommand,
-  serviceUninstallCommand,
-  serviceStartCommand,
-  serviceStopCommand,
-  serviceRestartCommand,
-  serviceStatusCommand,
   serviceLogsCommand,
+  serviceRestartCommand,
+  serviceStartCommand,
+  serviceStatusCommand,
+  serviceStopCommand,
+  serviceUninstallCommand,
 } from '../commands/service.js'
+import { startCommand } from '../commands/start.js'
+import { statusCommand } from '../commands/status.js'
+import { tuiCommand } from '../commands/tui.js'
+import { upgradeCommand } from '../commands/upgrade.js'
 
 const program = new Command()
 
 program
   .name('openaios')
-  .description('openAIOS — model-agnostic AI OS for running agents across channels')
+  .description(
+    'openAIOS — model-agnostic AI OS for running agents across channels',
+  )
   .version('0.1.0')
 
 program
@@ -56,7 +58,9 @@ program
 
 program
   .command('audit')
-  .description('Run security audit and print findings (exits 1 if any ERROR findings)')
+  .description(
+    'Run security audit and print findings (exits 1 if any ERROR findings)',
+  )
   .option('-c, --config <path>', 'Path to openAIOS.yml', 'openAIOS.yml')
   .action(async (opts: { config: string }) => {
     await auditCommand(opts).catch(fatal)
@@ -78,8 +82,14 @@ const service = program
 service
   .command('install')
   .description('Register openAIOS as a system daemon (systemd / launchd)')
-  .option('-d, --config-dir <path>', 'Directory containing openAIOS.yml (defaults to CWD)')
-  .option('--system', 'Install as system-level service (requires sudo, Linux only)')
+  .option(
+    '-d, --config-dir <path>',
+    'Directory containing openAIOS.yml (defaults to CWD)',
+  )
+  .option(
+    '--system',
+    'Install as system-level service (requires sudo, Linux only)',
+  )
   .action(async (opts: { configDir?: string; system?: boolean }) => {
     await serviceInstallCommand({
       ...(opts.configDir !== undefined && { configDir: opts.configDir }),

@@ -1,0 +1,127 @@
+direction: right
+
+title: openAIOS vs OpenClaw — Architecture Comparison {
+  shape: text
+  style.font-size: 22
+  style.bold: true
+  near: top-center
+}
+
+# --- OpenClaw side ---
+openclaw: OpenClaw {
+  style.fill: "#2d1b4e"
+  style.stroke: "#8b5cf6"
+  style.font-color: "#ffffff"
+  style.border-radius: 12
+
+  gateway: Gateway (WebSocket:18789) {
+    style.fill: "#1e1333"
+    style.font-color: "#8b5cf6"
+  }
+
+  pi: Pi Agent Framework {
+    style.fill: "#1e1333"
+    style.font-color: "#c084fc"
+    shape: hexagon
+  }
+
+  skills: SKILL.md Files {
+    style.fill: "#1e1333"
+    style.font-color: "#e879f9"
+    shape: document
+  }
+
+  plugins: Channel Plugins {
+    style.fill: "#1e1333"
+    style.font-color: "#f0abfc"
+  }
+
+  gateway -> pi: delegates reasoning
+  gateway -> skills: injects per-turn
+  gateway -> plugins: connects channels
+}
+
+# --- openAIOS side ---
+openaios: openAIOS {
+  style.fill: "#0f2744"
+  style.stroke: "#00d2ff"
+  style.font-color: "#ffffff"
+  style.border-radius: 12
+
+  router: RouterCore {
+    style.fill: "#0a1929"
+    style.font-color: "#00d2ff"
+  }
+
+  runners: Runner Adapters {
+    style.fill: "#0a1929"
+    style.font-color: "#50fa7b"
+    shape: hexagon
+  }
+
+  governance: Governance + Budget {
+    style.fill: "#0a1929"
+    style.font-color: "#f5a623"
+    shape: diamond
+  }
+
+  channels: Channel Adapters {
+    style.fill: "#0a1929"
+    style.font-color: "#e94560"
+  }
+
+  bus: AgentBus (+ BR Federation) {
+    style.fill: "#0a1929"
+    style.font-color: "#bd93f9"
+  }
+
+  docker: Container Orchestrator {
+    style.fill: "#0a1929"
+    style.font-color: "#2496ED"
+  }
+
+  skills: Skills Loader (SKILL.md compat) {
+    style.fill: "#0a1929"
+    style.font-color: "#e879f9"
+    shape: document
+  }
+
+  hotreload: Hot-Reload API {
+    style.fill: "#0a1929"
+    style.font-color: "#50fa7b"
+  }
+
+  router -> runners: selects runner
+  router -> governance: enforces policy
+  router -> channels: routes messages
+  router -> bus: inter-agent calls
+  router -> skills: injects per-agent
+  bus -> docker: docker exec
+}
+
+# --- Key differences ---
+vs: Key Differences {
+  style.fill: "#1a1a1a"
+  style.stroke: "#666666"
+  style.font-color: "#ffffff"
+  style.border-radius: 8
+
+  r1: "Runtime: OpenClaw uses external Pi framework / openAIOS has built-in multi-runner" {
+    style.font-color: "#00d2ff"
+  }
+  r2: "Config: OpenClaw uses SKILL.md / openAIOS uses YAML + supports SKILL.md" {
+    style.font-color: "#50fa7b"
+  }
+  r3: "Governance: OpenClaw has none / openAIOS has deny-by-default + budget" {
+    style.font-color: "#f5a623"
+  }
+  r4: "Multi-agent: OpenClaw has none / openAIOS has governed AgentBus" {
+    style.font-color: "#bd93f9"
+  }
+  r5: "Isolation: OpenClaw is process-level / openAIOS uses Docker containers" {
+    style.font-color: "#e94560"
+  }
+  r6: "Hot-reload: OpenClaw restarts / openAIOS patches config live" {
+    style.font-color: "#ff79c6"
+  }
+}

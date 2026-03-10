@@ -1,9 +1,9 @@
-export { LocalGovernance } from './local.js'
 export { BRGovernance } from './br.js'
+export { LocalGovernance } from './local.js'
 
 import type { GovernanceAdapter } from '@openaios/core'
-import { LocalGovernance } from './local.js'
 import { BRGovernance } from './br.js'
+import { LocalGovernance } from './local.js'
 
 interface AgentPermissions {
   allow: string[]
@@ -23,7 +23,9 @@ interface GovernanceOptions {
  * Factory: returns LocalGovernance, BRGovernance, or a composited adapter
  * that checks local rules first then BR.
  */
-export function createGovernance(options: GovernanceOptions): GovernanceAdapter {
+export function createGovernance(
+  options: GovernanceOptions,
+): GovernanceAdapter {
   const local = new LocalGovernance(options.agentPermissions)
 
   if (!options.br) {

@@ -28,7 +28,13 @@ export class ContainerOrchestrator {
   /** Track containers we've started so stopAll() knows what to clean up */
   private readonly managedAgents = new Set<string>()
 
-  constructor(opts: { busUrl: string; busToken: string; nodeId?: string; tsdproxy?: boolean; containerBusUrl?: string }) {
+  constructor(opts: {
+    busUrl: string
+    busToken: string
+    nodeId?: string
+    tsdproxy?: boolean
+    containerBusUrl?: string
+  }) {
     this.busUrl = opts.busUrl
     this.busToken = opts.busToken
     this.nodeId = opts.nodeId ?? 'local'
@@ -47,14 +53,22 @@ export class ContainerOrchestrator {
   /** Create the openaios bridge network idempotently. */
   async ensureNetwork(): Promise<void> {
     try {
-      await this.run('docker', ['network', 'create', NETWORK_NAME, '--driver', 'bridge'])
+      await this.run('docker', [
+        'network',
+        'create',
+        NETWORK_NAME,
+        '--driver',
+        'bridge',
+      ])
     } catch {
       // Ignore "network already exists" error
     }
   }
 
   /** Create the shared memory volume idempotently. */
-  async ensureMemoryVolume(volumeName = 'openaios-shared-memory'): Promise<void> {
+  async ensureMemoryVolume(
+    volumeName = 'openaios-shared-memory',
+  ): Promise<void> {
     await this.run('docker', ['volume', 'create', volumeName]).catch(() => {
       // Ignore "volume already exists" error
     })
@@ -64,7 +78,10 @@ export class ContainerOrchestrator {
    * Start the container if it is not already running.
    * Idempotent — safe to call on every turn.
    */
-  async ensureRunning(agentName: string, config: DockerContainerConfig = {}): Promise<void> {
+  async ensureRunning(
+    agentName: string,
+    config: DockerContainerConfig = {},
+  ): Promise<void> {
     if (await this.isRunning(agentName)) return
     await this.start(agentName, config)
   }
@@ -73,7 +90,7 @@ export class ContainerOrchestrator {
   async start(
     agentName: string,
     config: DockerContainerConfig = {},
-    memoryVolume = 'openaios-shared-memory'
+    memoryVolume = 'openaios-shared-memory',
   ): Promise<void> {
     await this.ensureNetwork()
     await this.ensureMemoryVolume(memoryVolume)
@@ -84,24 +101,38 @@ export class ContainerOrchestrator {
     const cpus = String(config.cpus ?? 1)
 
     const args = [
-      'run', '-d',
-      '--name', name,
-      '--network', NETWORK_NAME,
-      '--memory', memory,
-      '--cpus', cpus,
-      '--add-host', 'host.docker.internal:host-gateway',
-      '--env', `OPENAIOS_AGENT_NAME=${agentName}`,
-      '--env', `OPENAIOS_BUS_URL=${this.containerBusUrl}`,
-      '--env', `OPENAIOS_BUS_TOKEN=${this.busToken}`,
-      '--env', `OPENAIOS_NODE_ID=${this.nodeId}`,
-      '--volume', `${this.volumeName(agentName)}:/workspace`,
-      '--volume', `${memoryVolume}:/workspace/memory`,
+      'run',
+      '-d',
+      '--name',
+      name,
+      '--network',
+      NETWORK_NAME,
+      '--memory',
+      memory,
+      '--cpus',
+      cpus,
+      '--add-host',
+      'host.docker.internal:host-gateway',
+      '--env',
+      `OPENAIOS_AGENT_NAME=${agentName}`,
+      '--env',
+      `OPENAIOS_BUS_URL=${this.containerBusUrl}`,
+      '--env',
+      `OPENAIOS_BUS_TOKEN=${this.busToken}`,
+      '--env',
+      `OPENAIOS_NODE_ID=${this.nodeId}`,
+      '--volume',
+      `${this.volumeName(agentName)}:/workspace`,
+      '--volume',
+      `${memoryVolume}:/workspace/memory`,
     ]
 
     if (this.tsdproxy) {
       args.push(
-        '--label', 'tsdproxy.enable=true',
-        '--label', `tsdproxy.name=openaios-${agentName}`,
+        '--label',
+        'tsdproxy.enable=true',
+        '--label',
+        `tsdproxy.name=openaios-${agentName}`,
       )
     }
 
@@ -110,7 +141,7 @@ export class ContainerOrchestrator {
     const result = await this.run('docker', args)
     if (result.exitCode !== 0) {
       throw new Error(
-        `Failed to start container for agent "${agentName}": ${result.stderr.slice(0, 500)}`
+        `Failed to start container for agent "${agentName}": ${result.stderr.slice(0, 500)}`,
       )
     }
 
@@ -129,7 +160,11 @@ export class ContainerOrchestrator {
   }
 
   /** Execute a command inside a running agent container. */
-  async exec(agentName: string, args: string[], env?: Record<string, string>): Promise<ExecResult> {
+  async exec(
+    agentName: string,
+    args: string[],
+    env?: Record<string, string>,
+  ): Promise<ExecResult> {
     const name = this.containerName(agentName)
 
     const dockerArgs = ['exec']
@@ -149,7 +184,8 @@ export class ContainerOrchestrator {
     const name = this.containerName(agentName)
     const result = await this.run('docker', [
       'inspect',
-      '--format', '{{.State.Running}}',
+      '--format',
+      '{{.State.Running}}',
       name,
     ])
     return result.exitCode === 0 && result.stdout.trim() === 'true'
@@ -170,8 +206,12 @@ export class ContainerOrchestrator {
 
       proc.stdout.setEncoding('utf-8')
       proc.stderr.setEncoding('utf-8')
-      proc.stdout.on('data', (chunk: string) => { stdout += chunk })
-      proc.stderr.on('data', (chunk: string) => { stderr += chunk })
+      proc.stdout.on('data', (chunk: string) => {
+        stdout += chunk
+      })
+      proc.stderr.on('data', (chunk: string) => {
+        stderr += chunk
+      })
 
       proc.on('close', (exitCode) => {
         resolve({ stdout, stderr, exitCode })

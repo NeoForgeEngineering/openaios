@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
-import { Box, Text, useInput, useApp } from 'ink'
-import { StatusPanel } from './panels/StatusPanel.js'
-import { LogsPanel } from './panels/LogsPanel.js'
+import { Box, Text, useApp, useInput } from 'ink'
+import type React from 'react'
+import { useState } from 'react'
 import { ConfigPanel } from './panels/ConfigPanel.js'
+import { LogsPanel } from './panels/LogsPanel.js'
+import { StatusPanel } from './panels/StatusPanel.js'
 
 type Tab = 1 | 2 | 3
 
@@ -31,7 +32,9 @@ export function TuiApp({ baseUrl }: { baseUrl: string }): React.ReactElement {
       {/* Header */}
       <Box paddingX={1} justifyContent="space-between">
         <Box gap={2}>
-          <Text bold color="white">openAIOS</Text>
+          <Text bold color="white">
+            openAIOS
+          </Text>
           {([1, 2, 3] as Tab[]).map((t) => (
             <Text key={t} color={tab === t ? 'green' : 'gray'} bold={tab === t}>
               [{t}] {TAB_LABELS[t]}

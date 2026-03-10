@@ -1,0 +1,194 @@
+direction: right
+
+title: openAIOS Architecture {
+  shape: text
+  style.font-size: 28
+  style.bold: true
+  near: top-center
+}
+
+# --- Channels ---
+channels: Channels {
+  style.fill: "#1a1a2e"
+  style.stroke: "#e94560"
+  style.font-color: "#ffffff"
+
+  telegram: Telegram Bot {
+    shape: image
+    icon: https://cdn.simpleicons.org/telegram/26A5E4
+  }
+  discord: Discord Bot {
+    shape: image
+    icon: https://cdn.simpleicons.org/discord/5865F2
+  }
+  webhook: Webhook (HTTP) {
+    shape: hexagon
+    style.fill: "#16213e"
+    style.font-color: "#e94560"
+  }
+}
+
+# --- Router (thin dispatcher) ---
+router: RouterCore (Mailroom) {
+  style.fill: "#0f3460"
+  style.stroke: "#e94560"
+  style.font-color: "#ffffff"
+  style.border-radius: 12
+
+  dispatch: "Dispatch: { sessionKey, message }" {
+    style.font-color: "#00d2ff"
+  }
+
+  cost: "Cost tracking (SessionStore)" {
+    shape: cylinder
+    style.fill: "#16213e"
+    style.font-color: "#50fa7b"
+  }
+
+  budget: BudgetManager {
+    shape: cylinder
+    style.fill: "#16213e"
+    style.font-color: "#50fa7b"
+  }
+
+  dispatch -> cost: record spend
+  dispatch -> budget: check / downgrade
+}
+
+# --- Autonomous Runners ---
+runners: Autonomous Runners (own config + sessions) {
+  style.fill: "#1a1a2e"
+  style.stroke: "#50fa7b"
+  style.font-color: "#ffffff"
+
+  native: "ClaudeCodeRunner (env: native)" {
+    style.fill: "#16213e"
+    style.font-color: "#00d2ff"
+  }
+  docker: "DockerRunner (env: docker)" {
+    style.fill: "#16213e"
+    style.font-color: "#bd93f9"
+  }
+  llm: "runner.llm: claude-code | openai-compat | gemini | ollama" {
+    style.fill: "#16213e"
+    style.font-color: "#f5a623"
+    style.font-size: 13
+  }
+
+  config: "AgentConfig (set once at startup)" {
+    shape: document
+    style.fill: "#16213e"
+    style.font-color: "#f1fa8c"
+  }
+
+  sessions: "sessions/{sessionKey}/ (owned by runner)" {
+    shape: cylinder
+    style.fill: "#16213e"
+    style.font-color: "#ff79c6"
+  }
+}
+
+# --- Governance + Bus ---
+governance: Governance {
+  style.fill: "#1a1a2e"
+  style.stroke: "#f5a623"
+  style.font-color: "#ffffff"
+
+  local: LocalGovernance {
+    style.fill: "#16213e"
+    style.font-color: "#f5a623"
+  }
+  br: BRGovernance {
+    style.fill: "#16213e"
+    style.font-color: "#f5a623"
+  }
+}
+
+bus: AgentBus {
+  style.fill: "#1a1a2e"
+  style.stroke: "#bd93f9"
+  style.font-color: "#ffffff"
+
+  governed: "Two-layer auth" {
+    style.fill: "#16213e"
+    style.font-color: "#bd93f9"
+  }
+}
+
+# --- Docker Layer ---
+containers: Docker Containers {
+  style.fill: "#1a1a2e"
+  style.stroke: "#bd93f9"
+  style.font-color: "#ffffff"
+
+  agent_a: Agent A {
+    shape: image
+    icon: https://cdn.simpleicons.org/docker/2496ED
+  }
+  agent_b: Agent B {
+    shape: image
+    icon: https://cdn.simpleicons.org/docker/2496ED
+  }
+  browser: Browser Sidecar {
+    shape: image
+    icon: https://cdn.simpleicons.org/googlechrome/4285F4
+  }
+}
+
+# --- Dashboard ---
+dashboard: Dashboard + TUI {
+  style.fill: "#1a1a2e"
+  style.stroke: "#ff79c6"
+  style.font-color: "#ffffff"
+
+  web: Web UI {
+    shape: page
+    style.fill: "#16213e"
+    style.font-color: "#ff79c6"
+  }
+  tui: Terminal UI {
+    style.fill: "#16213e"
+    style.font-color: "#ff79c6"
+  }
+  hotreload: "reconfigure() — no restart" {
+    style.fill: "#16213e"
+    style.font-color: "#50fa7b"
+  }
+}
+
+# --- Connections ---
+channels.telegram -> router.dispatch: InboundMessage
+channels.discord -> router.dispatch: InboundMessage
+channels.webhook -> router.dispatch: InboundMessage
+
+router.dispatch -> runners.native: "{ sessionKey, message }"
+router.dispatch -> runners.docker: "{ sessionKey, message }"
+
+runners.docker -> containers.agent_a: docker exec
+runners.docker -> containers.agent_b: docker exec
+containers.agent_a -> containers.browser: Playwright
+
+containers.agent_a -> bus.governed: call_agent {
+  style.stroke: "#bd93f9"
+  style.stroke-dash: 3
+}
+
+bus.governed -> governance.local: check policy
+bus.governed -> runners: route to callee {
+  style.stroke: "#bd93f9"
+  style.stroke-dash: 3
+}
+
+dashboard.hotreload -> runners: runner.reconfigure() {
+  style.stroke: "#50fa7b"
+  style.stroke-dash: 3
+}
+
+# --- Config ---
+config: openAIOS.yml {
+  shape: document
+  style.fill: "#2d2d2d"
+  style.font-color: "#f1fa8c"
+  near: bottom-center
+}
+config -> runners.config: AgentConfig at startup

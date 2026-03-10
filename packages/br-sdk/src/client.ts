@@ -51,13 +51,18 @@ export class BRClient {
   }
 
   async getPolicyRules(agentName: string): Promise<BRPolicyRule[]> {
-    return this.get<BRPolicyRule[]>(`/v1/agents/${encodeURIComponent(agentName)}/policy`)
+    return this.get<BRPolicyRule[]>(
+      `/v1/agents/${encodeURIComponent(agentName)}/policy`,
+    )
   }
 
   async heartbeat(agentName: string): Promise<{ ok: boolean }> {
-    return this.post<{ ok: boolean }>(`/v1/agents/${encodeURIComponent(agentName)}/heartbeat`, {
-      timestampMs: Date.now(),
-    })
+    return this.post<{ ok: boolean }>(
+      `/v1/agents/${encodeURIComponent(agentName)}/heartbeat`,
+      {
+        timestampMs: Date.now(),
+      },
+    )
   }
 
   private async get<T>(path: string): Promise<T> {
@@ -71,7 +76,11 @@ export class BRClient {
     return res.json() as Promise<T>
   }
 
-  private async fetch(method: string, path: string, body?: unknown): Promise<Response> {
+  private async fetch(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<Response> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), this.timeoutMs)
 

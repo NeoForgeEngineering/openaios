@@ -1,17 +1,21 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
-import { ConfigSchema } from './schema/config.js'
 import type { Config } from './schema/config.js'
+import { ConfigSchema } from './schema/config.js'
 
 export function loadConfig(configPath?: string): Config {
-  const path = resolve(configPath ?? process.env['OPENAIOS_CONFIG'] ?? 'openAIOS.yml')
+  const path = resolve(
+    configPath ?? process.env.OPENAIOS_CONFIG ?? 'openAIOS.yml',
+  )
 
   let raw: string
   try {
     raw = readFileSync(path, 'utf-8')
   } catch (err) {
-    throw new Error(`Cannot read config file at ${path}: ${(err as Error).message}`)
+    throw new Error(
+      `Cannot read config file at ${path}: ${(err as Error).message}`,
+    )
   }
 
   let parsed: unknown

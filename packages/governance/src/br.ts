@@ -36,7 +36,10 @@ export class BRGovernance implements GovernanceAdapter {
 
   async checkPolicy(req: PolicyRequest): Promise<PolicyDecision> {
     const failDecision: PolicyDecision = this.failSecure
-      ? { allowed: false, reason: 'BR governance unreachable (fail-secure mode)' }
+      ? {
+          allowed: false,
+          reason: 'BR governance unreachable (fail-secure mode)',
+        }
       : { allowed: true, reason: 'BR governance unreachable (fail-open)' }
 
     try {
@@ -59,8 +62,14 @@ export class BRGovernance implements GovernanceAdapter {
 
       const data = (await res.json()) as { allowed: boolean; reason?: string }
       return data.allowed
-        ? { allowed: true as const, ...(data.reason !== undefined && { reason: data.reason }) }
-        : { allowed: false as const, reason: data.reason ?? 'Denied by BR governance' }
+        ? {
+            allowed: true as const,
+            ...(data.reason !== undefined && { reason: data.reason }),
+          }
+        : {
+            allowed: false as const,
+            reason: data.reason ?? 'Denied by BR governance',
+          }
     } catch {
       return failDecision
     }

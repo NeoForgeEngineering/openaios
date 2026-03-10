@@ -1,0 +1,119 @@
+direction: right
+
+title: openAIOS Federation — BR Platform Multi-Node Routing {
+  shape: text
+  style.font-size: 22
+  style.bold: true
+  near: top-center
+}
+
+# --- Node A ---
+node_a: Node A (us-east) {
+  style.fill: "#0f3460"
+  style.stroke: "#00d2ff"
+  style.font-color: "#ffffff"
+  style.border-radius: 12
+
+  bus_a: FederatedAgentBus {
+    style.fill: "#16213e"
+    style.font-color: "#00d2ff"
+  }
+
+  local_bus: Local AgentBus {
+    style.fill: "#16213e"
+    style.font-color: "#bd93f9"
+  }
+
+  agent_a: Agent: assistant {
+    style.fill: "#16213e"
+    style.font-color: "#50fa7b"
+    shape: hexagon
+  }
+
+  agent_b: Agent: coder {
+    style.fill: "#16213e"
+    style.font-color: "#50fa7b"
+    shape: hexagon
+  }
+
+  bus_a -> local_bus: local agent?
+  local_bus -> agent_a
+  local_bus -> agent_b
+}
+
+# --- Node B ---
+node_b: Node B (eu-west) {
+  style.fill: "#0f3460"
+  style.stroke: "#ff79c6"
+  style.font-color: "#ffffff"
+  style.border-radius: 12
+
+  bus_b: FederatedAgentBus {
+    style.fill: "#16213e"
+    style.font-color: "#ff79c6"
+  }
+
+  local_bus_b: Local AgentBus {
+    style.fill: "#16213e"
+    style.font-color: "#bd93f9"
+  }
+
+  agent_c: Agent: researcher {
+    style.fill: "#16213e"
+    style.font-color: "#50fa7b"
+    shape: hexagon
+  }
+
+  bus_b -> local_bus_b: local agent?
+  local_bus_b -> agent_c
+}
+
+# --- Cross-node flow ---
+node_a.bus_a -> node_b.bus_b: "POST /internal/bus/message\nBearer {peer_token}" {
+  style.stroke: "#ff79c6"
+  style.stroke-dash: 3
+  style.font-color: "#ff79c6"
+}
+
+node_b.bus_b -> node_a.bus_a: "response" {
+  style.stroke: "#00d2ff"
+  style.stroke-dash: 3
+  style.font-color: "#00d2ff"
+}
+
+# --- Config ---
+config_a: |md
+  # Node A config
+  ```yaml
+  federation:
+    node_id: us-east
+    inbound_token: ${PEER_TOKEN_A}
+    peers:
+      - node_id: eu-west
+        bus_url: ${NODE_B_BUS_URL}
+        token: ${PEER_TOKEN_B}
+        agents: [researcher]
+  ```
+| {
+  near: bottom-left
+  style.fill: "#2d2d2d"
+  style.font-color: "#f1fa8c"
+}
+
+config_b: |md
+  # Node B config
+  ```yaml
+  federation:
+    node_id: eu-west
+    inbound_token: ${PEER_TOKEN_B}
+    peers:
+      - node_id: us-east
+        bus_url: ${NODE_A_BUS_URL}
+        token: ${PEER_TOKEN_A}
+        agents: [assistant, coder]
+  ```
+| {
+  near: bottom-right
+  style.fill: "#2d2d2d"
+  style.font-color: "#f1fa8c"
+}
