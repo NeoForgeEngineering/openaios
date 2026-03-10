@@ -1,4 +1,5 @@
 import type {
+  AgentConfig,
   RunInput,
   RunnerAdapter,
   RunResult,
@@ -8,8 +9,6 @@ import type {
 interface OpenAICompatRunnerOptions {
   apiKey: string
   baseUrl?: string
-  /** Default model to use if not specified in input */
-  defaultModel?: string
 }
 
 /**
@@ -18,28 +17,30 @@ interface OpenAICompatRunnerOptions {
  */
 export class OpenAICompatRunner implements RunnerAdapter {
   readonly supportsSessionResume = false
-  readonly mode = 'native' as const
+  readonly env = 'native' as const
+  private config: AgentConfig
   private readonly apiKey: string
   private readonly baseUrl: string
-  private readonly defaultModel: string
   private history = new Map<string, Array<{ role: string; content: string }>>()
 
-  constructor(options: OpenAICompatRunnerOptions) {
+  constructor(config: AgentConfig, options: OpenAICompatRunnerOptions) {
+    this.config = config
     this.apiKey = options.apiKey
     this.baseUrl = (options.baseUrl ?? 'https://api.openai.com').replace(
       /\/$/,
       '',
     )
-    this.defaultModel = options.defaultModel ?? 'gpt-4o-mini'
   }
 
   async run(input: RunInput): Promise<RunResult> {
     const history = this.getHistory(input.sessionKey)
     history.push({ role: 'user', content: input.message })
 
-    const model = this.resolveModel(input.model)
+    const model = this.resolveModel(
+      input.modelOverride ?? this.config.defaultModel,
+    )
     const messages = [
-      { role: 'system', content: input.systemPrompt },
+      { role: 'system', content: this.config.systemPrompt },
       ...history,
     ]
 
@@ -69,7 +70,6 @@ export class OpenAICompatRunner implements RunnerAdapter {
     this.history.set(input.sessionKey, history)
 
     return {
-      claudeSessionId: input.sessionKey,
       output,
       model: data.model,
       ...(data.usage?.prompt_tokens !== undefined && {
@@ -85,9 +85,11 @@ export class OpenAICompatRunner implements RunnerAdapter {
     const history = this.getHistory(input.sessionKey)
     history.push({ role: 'user', content: input.message })
 
-    const model = this.resolveModel(input.model)
+    const model = this.resolveModel(
+      input.modelOverride ?? this.config.defaultModel,
+    )
     const messages = [
-      { role: 'system', content: input.systemPrompt },
+      { role: 'system', content: this.config.systemPrompt },
       ...history,
     ]
 
@@ -131,10 +133,13 @@ export class OpenAICompatRunner implements RunnerAdapter {
     this.history.set(input.sessionKey, history)
 
     return {
-      claudeSessionId: input.sessionKey,
       output: fullOutput,
       model,
     }
+  }
+
+  reconfigure(config: AgentConfig): void {
+    this.config = config
   }
 
   async healthCheck(): Promise<boolean> {
@@ -151,7 +156,7 @@ export class OpenAICompatRunner implements RunnerAdapter {
 
   private resolveModel(model: string): string {
     // Strip provider prefix like "groq/" or "openrouter/"
-    return model.replace(/^[^/]+\//, '') || this.defaultModel
+    return model.replace(/^[^/]+\//, '') || this.config.defaultModel
   }
 
   private getHistory(

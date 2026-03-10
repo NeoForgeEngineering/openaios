@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import type { BudgetManager } from '@openaios/budget'
 import type {
   AgentBus as AgentBusInterface,
   AgentBusRequest,
@@ -8,15 +8,10 @@ import type {
   Session,
   SessionStore,
 } from '@openaios/core'
-import type { BudgetManager } from '@openaios/budget'
 
 export interface AgentBusEntry {
   runner: RunnerAdapter
-  systemPrompt: string
   defaultModel: string
-  allowedTools: string[]
-  deniedTools: string[]
-  workspacesDir: string
   /** Agent names this agent is explicitly permitted to call */
   allowedCallees: string[]
 }
@@ -77,56 +72,54 @@ export class AgentBus implements AgentBusInterface {
       input: { toAgent: req.toAgent, message: req.message },
     })
     if (!decision.allowed) {
-      throw new AgentCallDeniedError(req.fromAgent, req.toAgent, decision.reason)
-    }
-
-    // 3. Check allowedCallees as a second layer — deny if caller is unknown or not permitted
-    const fromEntry = this.agents.get(req.fromAgent)
-    if (!fromEntry || !fromEntry.allowedCallees.includes(req.toAgent)) {
       throw new AgentCallDeniedError(
         req.fromAgent,
         req.toAgent,
-        `"${req.toAgent}" is not in allowedCallees for "${req.fromAgent}"`
+        decision.reason,
       )
+    }
+
+    // 3. Check allowedCallees as a second layer — skip for trusted peer requests
+    //    (already authorized at HTTP layer via inbound_token)
+    if (!req.inboundPeer) {
+      const fromEntry = this.agents.get(req.fromAgent)
+      if (!fromEntry || !fromEntry.allowedCallees.includes(req.toAgent)) {
+        throw new AgentCallDeniedError(
+          req.fromAgent,
+          req.toAgent,
+          `"${req.toAgent}" is not in allowedCallees for "${req.fromAgent}"`,
+        )
+      }
     }
 
     // 4. Budget check for the callee
     const budgetCheck = this.budget.check(req.toAgent, entry.defaultModel)
     if (!budgetCheck.allowed) {
       throw new Error(
-        `Budget exceeded for agent "${req.toAgent}": ${budgetCheck.reason ?? 'limit reached'}`
+        `Budget exceeded for agent "${req.toAgent}": ${budgetCheck.reason ?? 'limit reached'}`,
       )
     }
 
     const effectiveModel = budgetCheck.effectiveModel ?? entry.defaultModel
+    const isDowngraded = effectiveModel !== entry.defaultModel
 
-    // 5. Load or create session for the callee scoped to this caller session
-    const sessionKey = {
-      agentName: req.toAgent,
-      userId: `bus:${req.fromAgent}:${req.callerSessionKey}`,
-    }
+    // 5. Session key scoped to this caller session (cost tracking only)
+    const sessionUserId = `bus:${req.fromAgent}:${req.callerSessionKey}`
+    const sessionKey = { agentName: req.toAgent, userId: sessionUserId }
     const session: Session | undefined = await this.sessionStore.get(sessionKey)
 
-    // 6. Execute turn
+    // 6. Execute turn — runner owns its own session continuity
     const result = await entry.runner.run({
-      agentName: req.toAgent,
-      sessionKey: sessionKey.userId,
-      ...(session?.claudeSessionId !== undefined && { claudeSessionId: session.claudeSessionId }),
+      sessionKey: sessionUserId,
       message: req.message,
-      systemPrompt: entry.systemPrompt,
-      workspaceDir: join(entry.workspacesDir, req.toAgent),
-      allowedTools: entry.allowedTools,
-      deniedTools: entry.deniedTools,
-      model: effectiveModel,
+      ...(isDowngraded && { modelOverride: effectiveModel }),
     })
 
-    // 7. Persist session
+    // 7. Persist session (cost tracking only)
     const now = Date.now()
     await this.sessionStore.set({
       agentName: req.toAgent,
-      userId: sessionKey.userId,
-      claudeSessionId: result.claudeSessionId,
-      currentModel: effectiveModel,
+      userId: sessionUserId,
       totalCostUsd: (session?.totalCostUsd ?? 0) + (result.costUsd ?? 0),
       createdAt: session?.createdAt ?? now,
       updatedAt: now,
@@ -134,7 +127,12 @@ export class AgentBus implements AgentBusInterface {
 
     // 8. Record budget for callee
     if (result.costUsd) {
-      this.budget.record(req.toAgent, result.costUsd, result.inputTokens, result.outputTokens)
+      this.budget.record(
+        req.toAgent,
+        result.costUsd,
+        result.inputTokens,
+        result.outputTokens,
+      )
     }
 
     // 9. Report to governance (fire-and-forget)
@@ -150,11 +148,11 @@ export class AgentBus implements AgentBusInterface {
     if (result.costUsd) {
       this.governance.reportTurnCost({
         agentName: req.toAgent,
-        sessionKey: sessionKey.userId,
+        sessionKey: sessionUserId,
         costUsd: result.costUsd,
         inputTokens: result.inputTokens ?? 0,
         outputTokens: result.outputTokens ?? 0,
-        model: effectiveModel,
+        model: result.model,
         timestampMs: Date.now(),
       })
     }

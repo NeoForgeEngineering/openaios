@@ -39,11 +39,7 @@ function makeMockBudget(override?: Partial<BudgetCheckResult>): BudgetManager {
 function makeEntry(overrides?: Partial<AgentBusEntry>): AgentBusEntry {
   return {
     runner: new MockRunner(),
-    systemPrompt: 'You are helpful.',
     defaultModel: 'test-model',
-    allowedTools: ['Read'],
-    deniedTools: [],
-    workspacesDir: '/tmp/workspaces',
     allowedCallees: [],
     ...overrides,
   }
@@ -136,8 +132,8 @@ describe('AgentBus', () => {
     )
   })
 
-  // AC5: No prior session → runner receives RunInput without claudeSessionId
-  test('calls runner with correct input when no prior session exists', async () => {
+  // AC5: Runner receives sessionKey and message
+  test('calls runner with scoped sessionKey and message', async () => {
     const runner = new MockRunner()
     bus.register('caller', makeEntry({ allowedCallees: ['callee'] }))
     bus.register('callee', makeEntry({ runner, defaultModel: 'test-model' }))
@@ -147,32 +143,9 @@ describe('AgentBus', () => {
     assert.equal(runner.calls.length, 1)
     // biome-ignore lint/style/noNonNullAssertion: length asserted above
     const input = runner.calls[0]!
-    assert.equal(input.agentName, 'callee')
+    assert.equal(input.sessionKey, 'bus:caller:telegram:123')
     assert.equal(input.message, 'do something')
-    assert.equal(input.model, 'test-model')
-    assert.equal(input.claudeSessionId, undefined)
-  })
-
-  // AC6: Prior session exists → runner receives claudeSessionId
-  test('passes claudeSessionId from prior session to runner', async () => {
-    const runner = new MockRunner()
-    bus.register('caller', makeEntry({ allowedCallees: ['callee'] }))
-    bus.register('callee', makeEntry({ runner }))
-
-    // Seed a prior session
-    await sessionStore.set({
-      agentName: 'callee',
-      userId: 'bus:caller:telegram:123',
-      claudeSessionId: 'prior-session-abc',
-      currentModel: 'test-model',
-      totalCostUsd: 0.005,
-      createdAt: Date.now() - 1000,
-      updatedAt: Date.now() - 1000,
-    })
-
-    await bus.request(makeRequest())
-
-    assert.equal(runner.calls[0]?.claudeSessionId, 'prior-session-abc')
+    assert.equal(input.modelOverride, undefined)
   })
 
   // AC7: Successful call → budget recorded, governance events fired, response returned
@@ -181,7 +154,6 @@ describe('AgentBus', () => {
     runner.response = {
       output: 'done',
       costUsd: 0.002,
-      claudeSessionId: 'new-session',
     }
     const recorded: Array<{ agent: string; cost: number }> = []
     budget = {
@@ -209,12 +181,11 @@ describe('AgentBus', () => {
     assert.equal(governance.turnCostEvents[0]?.agentName, 'callee')
   })
 
-  // AC7b: Session is persisted after successful call
-  test('persists session after successful call', async () => {
+  // AC7b: Session totalCostUsd accumulates across calls
+  test('persists session with accumulated cost after successful call', async () => {
     const runner = new MockRunner()
     runner.response = {
       output: 'result',
-      claudeSessionId: 'sess-xyz',
       costUsd: 0.001,
     }
     bus.register('caller', makeEntry({ allowedCallees: ['callee'] }))
@@ -227,7 +198,7 @@ describe('AgentBus', () => {
       userId: 'bus:caller:telegram:123',
     })
     assert.ok(session)
-    assert.equal(session.claudeSessionId, 'sess-xyz')
+    assert.equal(session.totalCostUsd, 0.001)
     assert.equal(session.agentName, 'callee')
   })
 

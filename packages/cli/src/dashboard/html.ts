@@ -105,9 +105,9 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   <div class="panel-title" style="margin-bottom:8px">Sessions</div>
   <table>
     <thead><tr>
-      <th>agent</th><th>userId</th><th>model</th><th>cost</th><th>updated</th>
+      <th>agent</th><th>userId</th><th>cost</th><th>updated</th>
     </tr></thead>
-    <tbody id="sessions-body"><tr><td colspan="5" style="color:#555">Loading...</td></tr></tbody>
+    <tbody id="sessions-body"><tr><td colspan="4" style="color:#555">Loading...</td></tr></tbody>
   </table>
 </div>
 
@@ -298,13 +298,12 @@ function renderAgents(agents) {
 function renderSessions(sessions) {
   const tbody = document.getElementById('sessions-body')
   if (!sessions || sessions.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:#555">No sessions yet</td></tr>'
+    tbody.innerHTML = '<tr><td colspan="4" style="color:#555">No sessions yet</td></tr>'
     return
   }
   tbody.innerHTML = sessions.map(s => \`<tr>
     <td>\${s.agentName}</td>
     <td>\${s.userId}</td>
-    <td>\${s.currentModel}</td>
     <td>$\${(s.totalCostUsd||0).toFixed(4)}</td>
     <td>\${timeAgo(s.updatedAt)}</td>
   </tr>\`).join('')

@@ -1,7 +1,29 @@
-import type { ChannelAdapter, ChannelTarget, InboundMessage, MessageHandler, OutboundMessage } from '../interfaces/channel.js'
-import type { GovernanceAdapter, PolicyDecision, PolicyRequest, TurnCostEvent, ToolUseEvent } from '../interfaces/governance.js'
-import type { RunInput, RunResult, RunnerAdapter, StreamChunk } from '../interfaces/runner.js'
-import type { Session, SessionKey, SessionStore } from '../interfaces/session.js'
+import type {
+  ChannelAdapter,
+  ChannelTarget,
+  InboundMessage,
+  MessageHandler,
+  OutboundMessage,
+} from '../interfaces/channel.js'
+import type {
+  GovernanceAdapter,
+  PolicyDecision,
+  PolicyRequest,
+  ToolUseEvent,
+  TurnCostEvent,
+} from '../interfaces/governance.js'
+import type {
+  AgentConfig,
+  RunInput,
+  RunnerAdapter,
+  RunResult,
+  StreamChunk,
+} from '../interfaces/runner.js'
+import type {
+  Session,
+  SessionKey,
+  SessionStore,
+} from '../interfaces/session.js'
 
 // ---------------------------------------------------------------------------
 // MockRunnerAdapter
@@ -9,7 +31,7 @@ import type { Session, SessionKey, SessionStore } from '../interfaces/session.js
 
 export class MockRunner implements RunnerAdapter {
   supportsSessionResume = true
-  mode = 'native' as const
+  env = 'native' as const
   calls: RunInput[] = []
   response: Partial<RunResult> = {}
   healthy = true
@@ -17,12 +39,17 @@ export class MockRunner implements RunnerAdapter {
   async run(input: RunInput): Promise<RunResult> {
     this.calls.push(input)
     return {
-      claudeSessionId: this.response.claudeSessionId ?? 'mock-session-id',
       output: this.response.output ?? 'Mock response.',
-      costUsd: this.response.costUsd ?? 0.001,
-      inputTokens: this.response.inputTokens ?? 100,
-      outputTokens: this.response.outputTokens ?? 50,
-      model: this.response.model ?? input.model,
+      ...(this.response.costUsd !== undefined && {
+        costUsd: this.response.costUsd,
+      }),
+      ...(this.response.inputTokens !== undefined && {
+        inputTokens: this.response.inputTokens,
+      }),
+      ...(this.response.outputTokens !== undefined && {
+        outputTokens: this.response.outputTokens,
+      }),
+      model: this.response.model ?? input.modelOverride ?? 'test-model',
     }
   }
 
@@ -31,13 +58,13 @@ export class MockRunner implements RunnerAdapter {
     yield { type: 'text', text: 'Mock ' }
     yield { type: 'text', text: 'response.' }
     return {
-      claudeSessionId: 'mock-session-id',
       output: 'Mock response.',
-      costUsd: 0.001,
-      inputTokens: 100,
-      outputTokens: 50,
-      model: input.model,
+      model: input.modelOverride ?? 'test-model',
     }
+  }
+
+  reconfigure(_config: AgentConfig): void {
+    // no-op in mock
   }
 
   async healthCheck(): Promise<boolean> {
@@ -83,7 +110,10 @@ export class MockSessionStore implements SessionStore {
   }
 
   async set(session: Session): Promise<void> {
-    this.store.set(this.key({ agentName: session.agentName, userId: session.userId }), session)
+    this.store.set(
+      this.key({ agentName: session.agentName, userId: session.userId }),
+      session,
+    )
   }
 
   async delete(key: SessionKey): Promise<void> {

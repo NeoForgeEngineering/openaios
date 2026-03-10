@@ -1,4 +1,5 @@
 import type {
+  AgentConfig,
   RunInput,
   RunnerAdapter,
   RunResult,
@@ -15,12 +16,14 @@ interface OllamaRunnerOptions {
  */
 export class OllamaRunner implements RunnerAdapter {
   readonly supportsSessionResume = false
-  readonly mode = 'native' as const
+  readonly env = 'native' as const
+  private config: AgentConfig
   private readonly baseUrl: string
   /** In-memory conversation history keyed by sessionKey */
   private history = new Map<string, Array<{ role: string; content: string }>>()
 
-  constructor(options: OllamaRunnerOptions = {}) {
+  constructor(config: AgentConfig, options: OllamaRunnerOptions = {}) {
+    this.config = config
     this.baseUrl = options.baseUrl ?? 'http://localhost:11434'
   }
 
@@ -28,13 +31,13 @@ export class OllamaRunner implements RunnerAdapter {
     const history = this.getHistory(input.sessionKey)
     history.push({ role: 'user', content: input.message })
 
+    const model = this.resolveModel(
+      input.modelOverride ?? this.config.defaultModel,
+    )
     const messages = [
-      { role: 'system', content: input.systemPrompt },
+      { role: 'system', content: this.config.systemPrompt },
       ...history,
     ]
-
-    // Extract model name — strip "ollama/" prefix if present
-    const model = input.model.replace(/^ollama\//, '')
 
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
@@ -59,7 +62,6 @@ export class OllamaRunner implements RunnerAdapter {
     this.history.set(input.sessionKey, history)
 
     return {
-      claudeSessionId: input.sessionKey, // used as a stable key, not a real claude session
       output,
       model: `ollama/${model}`,
       ...(data.prompt_eval_count !== undefined && {
@@ -73,14 +75,19 @@ export class OllamaRunner implements RunnerAdapter {
     const history = this.getHistory(input.sessionKey)
     history.push({ role: 'user', content: input.message })
 
-    const model = input.model.replace(/^ollama\//, '')
+    const model = this.resolveModel(
+      input.modelOverride ?? this.config.defaultModel,
+    )
 
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'system', content: input.systemPrompt }, ...history],
+        messages: [
+          { role: 'system', content: this.config.systemPrompt },
+          ...history,
+        ],
         stream: true,
       }),
     })
@@ -115,10 +122,13 @@ export class OllamaRunner implements RunnerAdapter {
     this.history.set(input.sessionKey, history)
 
     return {
-      claudeSessionId: input.sessionKey,
       output: fullOutput,
       model: `ollama/${model}`,
     }
+  }
+
+  reconfigure(config: AgentConfig): void {
+    this.config = config
   }
 
   async healthCheck(): Promise<boolean> {
@@ -130,6 +140,10 @@ export class OllamaRunner implements RunnerAdapter {
     } catch {
       return false
     }
+  }
+
+  private resolveModel(model: string): string {
+    return model.replace(/^ollama\//, '')
   }
 
   private getHistory(

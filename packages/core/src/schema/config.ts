@@ -73,7 +73,10 @@ const CapabilitiesSchema = z.object({
 const AgentSchema = z.object({
   name: z
     .string()
-    .regex(/^[a-z0-9-]+$/, 'Agent name must be lowercase alphanumeric with hyphens'),
+    .regex(
+      /^[a-z0-9-]+$/,
+      'Agent name must be lowercase alphanumeric with hyphens',
+    ),
   /** Inline persona string or path to a CLAUDE.md file */
   persona: z.string().default('You are a helpful assistant.'),
   model: AgentModelSchema,
@@ -153,7 +156,9 @@ const FederationSchema = z.object({
 
 const NetworkSchema = z.object({
   /** Interface to bind — 'tailscale' resolves the Tailscale IP automatically */
-  bind: z.union([z.literal('tailscale'), z.literal('localhost'), z.string()]).default('tailscale'),
+  bind: z
+    .union([z.literal('tailscale'), z.literal('localhost'), z.string()])
+    .default('tailscale'),
   /** Port for webhook/web-chat channels */
   port: z.number().int().default(3000),
   /** Port for the internal agent bus HTTP server (0 = random) */
@@ -194,7 +199,8 @@ export const ConfigSchema = z.object({
 })
 
 export type Config = z.infer<typeof ConfigSchema>
-export type AgentConfig = z.infer<typeof AgentSchema>
+/** Full agent definition as parsed from openAIOS.yml */
+export type AgentDefinition = z.infer<typeof AgentSchema>
 export type AgentBudgetConfig = z.infer<typeof AgentBudgetSchema>
 export type RunnerConfig = z.infer<typeof RunnerConfigSchema>
 export type ModelProviders = z.infer<typeof ModelProvidersSchema>

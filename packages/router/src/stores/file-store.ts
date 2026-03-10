@@ -1,5 +1,5 @@
-import { readFile, writeFile, unlink, readdir } from 'node:fs/promises'
 import { existsSync, mkdirSync } from 'node:fs'
+import { readdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Session, SessionKey, SessionStore } from '@openaios/core'
 
@@ -28,7 +28,10 @@ export class FileSessionStore implements SessionStore {
   }
 
   async set(session: Session): Promise<void> {
-    const path = this.filePath({ agentName: session.agentName, userId: session.userId })
+    const path = this.filePath({
+      agentName: session.agentName,
+      userId: session.userId,
+    })
     await writeFile(path, JSON.stringify(session, null, 2), 'utf-8')
   }
 
@@ -55,7 +58,7 @@ export class FileSessionStore implements SessionStore {
             } catch {
               return null
             }
-          })
+          }),
       )
       return sessions.filter((s): s is Session => s !== null)
     } catch {
@@ -76,7 +79,7 @@ export class FileSessionStore implements SessionStore {
             } catch {
               return null
             }
-          })
+          }),
       )
       return sessions.filter((s): s is Session => s !== null)
     } catch {

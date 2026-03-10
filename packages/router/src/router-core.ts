@@ -1,5 +1,6 @@
-import { join } from 'node:path'
+import type { BudgetManager } from '@openaios/budget'
 import type {
+  AgentBus as AgentBusInterface,
   ChannelAdapter,
   GovernanceAdapter,
   InboundMessage,
@@ -8,16 +9,11 @@ import type {
   SessionStore,
 } from '@openaios/core'
 import { logger } from '@openaios/core'
-import type { BudgetManager } from '@openaios/budget'
-import type { AgentBus } from './agent-bus.js'
 
 export interface AgentRoute {
   agentName: string
-  systemPrompt: string
   defaultModel: string
   premiumModel?: string
-  allowedTools: string[]
-  deniedTools: string[]
   runner: RunnerAdapter
   channel: ChannelAdapter
 }
@@ -27,10 +23,8 @@ export interface RouterCoreOptions {
   sessionStore: SessionStore
   governance: GovernanceAdapter
   budget: BudgetManager
-  /** Base directory for agent workspaces */
-  workspacesDir: string
   /** Optional agent bus for cross-agent calls */
-  bus?: AgentBus
+  bus?: AgentBusInterface
 }
 
 const MAX_MESSAGE_BYTES = 16 * 1024 // 16KB
@@ -41,7 +35,7 @@ export class RouterCore {
   private readonly opts: RouterCoreOptions
   private readonly routesByChannel = new Map<ChannelAdapter, AgentRoute>()
 
-  getBus(): AgentBus | undefined {
+  getBus(): AgentBusInterface | undefined {
     return this.opts.bus
   }
 
@@ -57,19 +51,6 @@ export class RouterCore {
     }
   }
 
-  updateRoute(
-    agentName: string,
-    patch: { systemPrompt?: string; allowedTools?: string[]; deniedTools?: string[] }
-  ): void {
-    for (const route of this.routesByChannel.values()) {
-      if (route.agentName === agentName) {
-        if (patch.systemPrompt !== undefined) route.systemPrompt = patch.systemPrompt
-        if (patch.allowedTools !== undefined) route.allowedTools = patch.allowedTools
-        if (patch.deniedTools !== undefined) route.deniedTools = patch.deniedTools
-      }
-    }
-  }
-
   async start(): Promise<void> {
     await Promise.all(this.opts.routes.map((r) => r.channel.start()))
     logger.info('[router]', `Started ${this.opts.routes.length} agent(s)`)
@@ -80,13 +61,16 @@ export class RouterCore {
     logger.info('[router]', 'Stopped')
   }
 
-  private async handleMessage(route: AgentRoute, msg: InboundMessage): Promise<void> {
+  private async handleMessage(
+    route: AgentRoute,
+    msg: InboundMessage,
+  ): Promise<void> {
     // Input validation
     if (Buffer.byteLength(msg.text, 'utf-8') > MAX_MESSAGE_BYTES) {
-      await route.channel.send(
-        msg.source,
-        { text: 'Message too long (max 16KB).', replyToMessageId: msg.messageId }
-      )
+      await route.channel.send(msg.source, {
+        text: 'Message too long (max 16KB).',
+        replyToMessageId: msg.messageId,
+      })
       return
     }
 
@@ -98,11 +82,14 @@ export class RouterCore {
 
     const sessionKey = { agentName: route.agentName, userId }
 
-    // Load or create session
-    let session = await this.opts.sessionStore.get(sessionKey)
+    // Load session for cost tracking
+    const session = await this.opts.sessionStore.get(sessionKey)
 
     // Budget check — may downgrade model
-    const budgetCheck = this.opts.budget.check(route.agentName, route.defaultModel)
+    const budgetCheck = this.opts.budget.check(
+      route.agentName,
+      route.defaultModel,
+    )
     if (!budgetCheck.allowed) {
       await route.channel.send(msg.source, {
         text: `Sorry, the budget for this agent has been exceeded. ${budgetCheck.reason ?? ''}`.trim(),
@@ -115,31 +102,26 @@ export class RouterCore {
     const isDowngraded = effectiveModel !== route.defaultModel
 
     if (isDowngraded) {
-      logger.info('[router]', `${route.agentName}: budget downgrade → ${effectiveModel}`)
+      logger.info(
+        '[router]',
+        `${route.agentName}: budget downgrade → ${effectiveModel}`,
+      )
     }
 
     logger.info('[router]', `${route.agentName} ← ${userId}`)
 
     try {
       const result = await route.runner.run({
-        agentName: route.agentName,
         sessionKey: userId,
-        ...(session?.claudeSessionId !== undefined && { claudeSessionId: session.claudeSessionId }),
         message: msg.text,
-        systemPrompt: route.systemPrompt,
-        workspaceDir: join(this.opts.workspacesDir, route.agentName),
-        allowedTools: route.allowedTools,
-        deniedTools: route.deniedTools,
-        model: effectiveModel,
+        ...(isDowngraded && { modelOverride: effectiveModel }),
       })
 
-      // Update session
+      // Update session (cost tracking only — runner owns session continuity)
       const now = Date.now()
       const updatedSession: Session = {
         agentName: route.agentName,
         userId,
-        claudeSessionId: result.claudeSessionId,
-        currentModel: effectiveModel,
         totalCostUsd: (session?.totalCostUsd ?? 0) + (result.costUsd ?? 0),
         createdAt: session?.createdAt ?? now,
         updatedAt: now,
@@ -152,7 +134,7 @@ export class RouterCore {
           route.agentName,
           result.costUsd,
           result.inputTokens,
-          result.outputTokens
+          result.outputTokens,
         )
       }
 
@@ -164,12 +146,15 @@ export class RouterCore {
           costUsd: result.costUsd,
           inputTokens: result.inputTokens ?? 0,
           outputTokens: result.outputTokens ?? 0,
-          model: effectiveModel,
+          model: result.model,
           timestampMs: Date.now(),
         })
       }
 
-      logger.info('[router]', `${route.agentName} → ${userId} (${result.costUsd !== undefined ? `$${result.costUsd.toFixed(4)}` : 'no cost'})`)
+      logger.info(
+        '[router]',
+        `${route.agentName} → ${userId} (${result.costUsd !== undefined ? `$${result.costUsd.toFixed(4)}` : 'no cost'})`,
+      )
 
       await route.channel.send(msg.source, {
         text: result.output,

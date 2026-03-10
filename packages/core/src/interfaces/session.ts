@@ -8,12 +8,8 @@ export interface SessionKey {
 export interface Session {
   agentName: string
   userId: string
-  /** The Claude Code session ID used with --resume */
-  claudeSessionId: string
   createdAt: number
   updatedAt: number
-  /** Current model in use (may be downgraded from config default) */
-  currentModel: string
   /** Total cost accumulated in this session */
   totalCostUsd: number
 }

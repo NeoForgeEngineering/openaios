@@ -1,24 +1,42 @@
-import { resolve, join } from 'node:path'
-import { homedir } from 'node:os'
-import { existsSync, readFileSync, mkdirSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import type { AgentBusRequest, AgentBusResponse } from '@openaios/core'
-import { loadConfig, logger } from '@openaios/core'
-import { createRunner, ContainerOrchestrator, CapabilityProvisioner } from '@openaios/runner'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import { homedir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { BudgetManager } from '@openaios/budget'
-import { createGovernance } from '@openaios/governance'
-import { RouterCore, SQLiteSessionStore, AgentBus, FederatedAgentBus } from '@openaios/router'
 import { TelegramAdapter, WebhookAdapter } from '@openaios/channels'
+import type {
+  AgentBusRequest,
+  AgentBusResponse,
+  AgentConfig,
+} from '@openaios/core'
+import { loadConfig, logger } from '@openaios/core'
+import { createGovernance } from '@openaios/governance'
 import type { AgentRoute } from '@openaios/router'
-import { DashboardServer } from '../dashboard/server.js'
+import {
+  AgentBus,
+  FederatedAgentBus,
+  RouterCore,
+  SQLiteSessionStore,
+} from '@openaios/router'
+import {
+  CapabilityProvisioner,
+  ContainerOrchestrator,
+  createRunner,
+} from '@openaios/runner'
 import { SecurityAuditor } from '../audit/auditor.js'
-import { patchAgentInConfig } from '../dashboard/config-writer.js'
 import type { AgentPatch } from '../dashboard/config-writer.js'
+import { patchAgentInConfig } from '../dashboard/config-writer.js'
+import { DashboardServer } from '../dashboard/server.js'
 
-export async function startCommand(options: { config?: string; dataDir?: string }): Promise<void> {
-  const configPath = resolve(options.config ?? process.env['OPENAIOS_CONFIG'] ?? 'openAIOS.yml')
+export async function startCommand(options: {
+  config?: string
+  dataDir?: string
+}): Promise<void> {
+  const configPath = resolve(
+    options.config ?? process.env.OPENAIOS_CONFIG ?? 'openAIOS.yml',
+  )
   const config = loadConfig(configPath)
 
   const dataDir = resolve(options.dataDir ?? config.data.dir)
@@ -39,12 +57,14 @@ export async function startCommand(options: { config?: string; dataDir?: string 
   const budget = new BudgetManager({
     dataDir,
     agentConfigs: config.budget?.agents ?? {},
-    ...(config.budget?.period !== undefined && { period: config.budget.period }),
+    ...(config.budget?.period !== undefined && {
+      period: config.budget.period,
+    }),
   })
 
   // Governance
   const agentPermissions = Object.fromEntries(
-    config.agents.map((a) => [a.name, a.permissions])
+    config.agents.map((a) => [a.name, a.permissions]),
   )
   const governance = createGovernance({
     agentPermissions,
@@ -65,7 +85,10 @@ export async function startCommand(options: { config?: string; dataDir?: string 
 
   await new Promise<void>((resolve, reject) => {
     httpServer.listen(config.network.port, () => {
-      logger.info('[openaios]', `HTTP server listening on port ${config.network.port}`)
+      logger.info(
+        '[openaios]',
+        `HTTP server listening on port ${config.network.port}`,
+      )
       resolve()
     })
     httpServer.on('error', reject)
@@ -84,7 +107,7 @@ export async function startCommand(options: { config?: string; dataDir?: string 
           busUrl: p.bus_url,
           token: p.token,
           agents: p.agents,
-        }))
+        })),
       )
     : localBus
 
@@ -94,10 +117,11 @@ export async function startCommand(options: { config?: string; dataDir?: string 
       return
     }
 
-    const auth = req.headers['authorization']
+    const auth = req.headers.authorization
     const inboundToken = config.federation?.inbound_token
     const isLocal = auth === `Bearer ${busToken}`
-    const isPeer = inboundToken !== undefined && auth === `Bearer ${inboundToken}`
+    const isPeer =
+      inboundToken !== undefined && auth === `Bearer ${inboundToken}`
     if (!isLocal && !isPeer) {
       res.writeHead(401).end('Unauthorized')
       return
@@ -105,7 +129,9 @@ export async function startCommand(options: { config?: string; dataDir?: string 
 
     let body = ''
     req.setEncoding('utf-8')
-    req.on('data', (chunk: string) => { body += chunk })
+    req.on('data', (chunk: string) => {
+      body += chunk
+    })
     req.on('end', () => {
       let parsed: AgentBusRequest
       try {
@@ -119,14 +145,17 @@ export async function startCommand(options: { config?: string; dataDir?: string 
         ? { ...parsed, inboundPeer: config.federation?.node_id ?? 'peer' }
         : parsed
 
-      bus.request(busReq).then((result: AgentBusResponse) => {
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify(result))
-      }).catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err)
-        res.writeHead(500, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ error: message }))
-      })
+      bus
+        .request(busReq)
+        .then((result: AgentBusResponse) => {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(result))
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err)
+          res.writeHead(500, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: message }))
+        })
     })
   })
 
@@ -135,7 +164,8 @@ export async function startCommand(options: { config?: string; dataDir?: string 
     const desiredPort = config.network.bus_port ?? 0
     busServer.listen(desiredPort, busBindAddr, () => {
       const addr = busServer.address()
-      busPort = typeof addr === 'object' && addr !== null ? addr.port : desiredPort
+      busPort =
+        typeof addr === 'object' && addr !== null ? addr.port : desiredPort
       resolve()
     })
   })
@@ -145,12 +175,16 @@ export async function startCommand(options: { config?: string; dataDir?: string 
 
   // Containers on the Docker bridge can't reach the tailscale IP.
   // host.docker.internal resolves to the Docker host gateway (requires --add-host in orchestrator).
-  const containerBusUrl = config.network.bind === 'tailscale'
-    ? `http://host.docker.internal:${busPort}`
-    : busUrl
+  const containerBusUrl =
+    config.network.bind === 'tailscale'
+      ? `http://host.docker.internal:${busPort}`
+      : busUrl
 
   if (config.network.tsdproxy) {
-    logger.info('[openaios]', 'tsdproxy enabled — agent containers will be registered on the Tailscale network')
+    logger.info(
+      '[openaios]',
+      'tsdproxy enabled — agent containers will be registered on the Tailscale network',
+    )
   }
 
   // --- Container orchestration ---
@@ -159,8 +193,12 @@ export async function startCommand(options: { config?: string; dataDir?: string 
 
   if (hasDockerAgents) {
     orchestrator = new ContainerOrchestrator({
-      busUrl, containerBusUrl, busToken,
-      ...(config.federation?.node_id !== undefined && { nodeId: config.federation.node_id }),
+      busUrl,
+      containerBusUrl,
+      busToken,
+      ...(config.federation?.node_id !== undefined && {
+        nodeId: config.federation.node_id,
+      }),
       ...(config.network.tsdproxy && { tsdproxy: true }),
     })
     provisioner = new CapabilityProvisioner(orchestrator)
@@ -196,53 +234,31 @@ export async function startCommand(options: { config?: string; dataDir?: string 
   const providers = config.models?.providers ?? {}
   const routes: AgentRoute[] = []
   const agentModels = new Map<string, string>()
-  const runnersByAgent = new Map<string, import('@openaios/core').RunnerAdapter>()
+  const runnersByAgent = new Map<
+    string,
+    import('@openaios/core').RunnerAdapter
+  >()
 
   for (const agent of config.agents) {
-    const basePersona = resolvePersona(agent.persona)
+    const agentConfig = buildAgentConfig({
+      agent,
+      workspacesDir,
+      memoryDir,
+      memoryPromptSuffix,
+      skillsDir,
+    })
 
-    // Load skill content into system prompt
-    const skillsSuffix = agent.skills
-      .map((skillName) => {
-        const skillPath = join(skillsDir, skillName, 'SKILL.md')
-        try {
-          return '\n\n' + readFileSync(skillPath, 'utf-8')
-        } catch {
-          logger.warn('[openaios]', `Skill "${skillName}" not found at ${skillPath}`)
-          return ''
-        }
-      })
-      .join('')
-
-    const systemPrompt = basePersona + memoryPromptSuffix + skillsSuffix
-    const runner = createRunner(agent.model.default, providers, agent.runner, {
+    const runner = createRunner(agentConfig, providers, agent.runner, {
       ...(orchestrator !== undefined && { orchestrator }),
-      agentName: agent.name,
     })
 
     agentModels.set(agent.name, agent.model.default)
     runnersByAgent.set(agent.name, runner)
 
-    // Auto-add call_agent to allowedTools when agent-calls is configured
-    const agentCallsTools =
-      agent.capabilities['agent-calls'].length > 0 ? ['call_agent'] : []
-
-    // Auto-add Bash(agent-browser:*) for native agents with browser capability
-    const browserTools =
-      agent.capabilities.browser && agent.runner.mode === 'native'
-        ? ['Bash(agent-browser:*)']
-        : []
-
-    const allowedTools = [...agent.permissions.allow, ...agentCallsTools, ...browserTools]
-
-    // Register on the bus regardless of runner mode
+    // Register on the bus — runner owns all config internally
     bus.register(agent.name, {
       runner,
-      systemPrompt,
       defaultModel: agent.model.default,
-      allowedTools,
-      deniedTools: agent.permissions.deny,
-      workspacesDir,
       allowedCallees: agent.capabilities['agent-calls'],
     })
 
@@ -251,11 +267,10 @@ export async function startCommand(options: { config?: string; dataDir?: string 
       const adapter = new TelegramAdapter(agent.channels.telegram.token)
       routes.push({
         agentName: agent.name,
-        systemPrompt,
         defaultModel: agent.model.default,
-        ...(agent.model.premium !== undefined && { premiumModel: agent.model.premium }),
-        allowedTools,
-        deniedTools: agent.permissions.deny,
+        ...(agent.model.premium !== undefined && {
+          premiumModel: agent.model.premium,
+        }),
         runner,
         channel: adapter,
       })
@@ -266,28 +281,41 @@ export async function startCommand(options: { config?: string; dataDir?: string 
       const adapter = new WebhookAdapter({
         server: httpServer,
         path: agent.channels.webhook.path,
-        ...(agent.channels.webhook.secret !== undefined && { secret: agent.channels.webhook.secret }),
+        ...(agent.channels.webhook.secret !== undefined && {
+          secret: agent.channels.webhook.secret,
+        }),
       })
       routes.push({
         agentName: agent.name,
-        systemPrompt,
         defaultModel: agent.model.default,
-        ...(agent.model.premium !== undefined && { premiumModel: agent.model.premium }),
-        allowedTools,
-        deniedTools: agent.permissions.deny,
+        ...(agent.model.premium !== undefined && {
+          premiumModel: agent.model.premium,
+        }),
         runner,
         channel: adapter,
       })
-      logger.info('[openaios]', `Agent "${agent.name}" → Webhook (${agent.channels.webhook.path})`)
+      logger.info(
+        '[openaios]',
+        `Agent "${agent.name}" → Webhook (${agent.channels.webhook.path})`,
+      )
     }
 
-    if (!agent.channels.telegram && !agent.channels.discord && !agent.channels.webhook) {
-      logger.warn('[openaios]', `Agent "${agent.name}" has no channels configured — skipping`)
+    if (
+      !agent.channels.telegram &&
+      !agent.channels.discord &&
+      !agent.channels.webhook
+    ) {
+      logger.warn(
+        '[openaios]',
+        `Agent "${agent.name}" has no channels configured — skipping`,
+      )
     }
   }
 
   if (routes.length === 0) {
-    throw new Error('No agents with configured channels found. Check your openAIOS.yml.')
+    throw new Error(
+      'No agents with configured channels found. Check your openAIOS.yml.',
+    )
   }
 
   const router = new RouterCore({
@@ -295,10 +323,14 @@ export async function startCommand(options: { config?: string; dataDir?: string 
     sessionStore,
     governance,
     budget,
-    workspacesDir,
     bus,
   })
 
+  /**
+   * Hot-reload an agent's config when governance or persona changes.
+   * Propagates new systemPrompt/allowedTools/deniedTools to the runner
+   * without losing session continuity.
+   */
   const onAgentUpdate = (agentName: string, patch: AgentPatch): void => {
     patchAgentInConfig(configPath, agentName, patch)
 
@@ -306,34 +338,26 @@ export async function startCommand(options: { config?: string; dataDir?: string 
     const agentCfg = freshConfig.agents.find((a) => a.name === agentName)
     if (!agentCfg) return
 
-    const basePersona = resolvePersona(agentCfg.persona)
-    const skillsSuffix = agentCfg.skills
-      .map((skillName) => {
-        const skillPath = join(skillsDir, skillName, 'SKILL.md')
-        try { return '\n\n' + readFileSync(skillPath, 'utf-8') } catch { return '' }
-      })
-      .join('')
-    const systemPrompt = basePersona + memoryPromptSuffix + skillsSuffix
-    const agentCallsTools = agentCfg.capabilities['agent-calls'].length > 0 ? ['call_agent'] : []
-    const browserTools =
-      agentCfg.capabilities.browser && agentCfg.runner.mode === 'native'
-        ? ['Bash(agent-browser:*)'] : []
-    const allowedTools = [...agentCfg.permissions.allow, ...agentCallsTools, ...browserTools]
+    const newAgentConfig = buildAgentConfig({
+      agent: agentCfg,
+      workspacesDir,
+      memoryDir,
+      memoryPromptSuffix,
+      skillsDir,
+    })
 
-    router.updateRoute(agentName, { systemPrompt, allowedTools, deniedTools: agentCfg.permissions.deny })
-
+    // Propagate governance changes to the runner (BR platform or local)
     const existingRunner = runnersByAgent.get(agentName)
     if (existingRunner) {
+      existingRunner.reconfigure(newAgentConfig)
+
       bus.register(agentName, {
         runner: existingRunner,
-        systemPrompt,
         defaultModel: agentCfg.model.default,
-        allowedTools,
-        deniedTools: agentCfg.permissions.deny,
-        workspacesDir,
         allowedCallees: agentCfg.capabilities['agent-calls'],
       })
     }
+
     logger.info('[openaios]', `Hot-reloaded agent "${agentName}"`)
   }
 
@@ -351,22 +375,40 @@ export async function startCommand(options: { config?: string; dataDir?: string 
   dashboardServer.register()
 
   // --- Security auditor ---
-  const auditor = new SecurityAuditor({ config, sessionStore, budgetManager: budget })
+  const auditor = new SecurityAuditor({
+    config,
+    sessionStore,
+    budgetManager: budget,
+  })
   const runAudit = async () => {
     const result = await auditor.run()
     dashboardServer.setAuditResult(result)
     for (const finding of result.findings) {
       if (finding.severity === 'ERROR') {
-        logger.error('[audit]', `${finding.agentName} ${finding.code}: ${finding.message}`)
+        logger.error(
+          '[audit]',
+          `${finding.agentName} ${finding.code}: ${finding.message}`,
+        )
       } else if (finding.severity === 'WARN') {
-        logger.warn('[audit]', `${finding.agentName} ${finding.code}: ${finding.message}`)
+        logger.warn(
+          '[audit]',
+          `${finding.agentName} ${finding.code}: ${finding.message}`,
+        )
       } else {
-        logger.info('[audit]', `${finding.agentName} ${finding.code}: ${finding.message}`)
+        logger.info(
+          '[audit]',
+          `${finding.agentName} ${finding.code}: ${finding.message}`,
+        )
       }
     }
   }
   await runAudit()
-  const auditInterval = setInterval(() => { void runAudit() }, 30 * 60 * 1000)
+  const auditInterval = setInterval(
+    () => {
+      void runAudit()
+    },
+    30 * 60 * 1000,
+  )
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
@@ -385,17 +427,89 @@ export async function startCommand(options: { config?: string; dataDir?: string 
   process.on('SIGTERM', () => shutdown('SIGTERM'))
 
   await router.start()
-  logger.info('[openaios]', `Dashboard available at http://localhost:${config.network.port}`)
+  logger.info(
+    '[openaios]',
+    `Dashboard available at http://localhost:${config.network.port}`,
+  )
   logger.info('[openaios]', 'Running. Press Ctrl+C to stop.')
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function buildAgentConfig(opts: {
+  agent: ReturnType<typeof loadConfig>['agents'][number]
+  workspacesDir: string
+  memoryDir: string
+  memoryPromptSuffix: string
+  skillsDir: string
+}): AgentConfig {
+  const { agent, workspacesDir, memoryDir, memoryPromptSuffix, skillsDir } =
+    opts
+
+  const basePersona = resolvePersona(agent.persona)
+
+  const skillsSuffix = agent.skills
+    .map((skillName) => {
+      const skillPath = join(skillsDir, skillName, 'SKILL.md')
+      try {
+        return `\n\n${readFileSync(skillPath, 'utf-8')}`
+      } catch {
+        logger.warn(
+          '[openaios]',
+          `Skill "${skillName}" not found at ${skillPath}`,
+        )
+        return ''
+      }
+    })
+    .join('')
+
+  const systemPrompt = basePersona + memoryPromptSuffix + skillsSuffix
+
+  // Auto-add call_agent to allowedTools when agent-calls is configured
+  const agentCallsTools =
+    agent.capabilities['agent-calls'].length > 0 ? ['call_agent'] : []
+
+  // Auto-add Bash(agent-browser:*) for native agents with browser capability
+  const browserTools =
+    agent.capabilities.browser && agent.runner.mode === 'native'
+      ? ['Bash(agent-browser:*)']
+      : []
+
+  const allowedTools = [
+    ...agent.permissions.allow,
+    ...agentCallsTools,
+    ...browserTools,
+  ]
+
+  return {
+    agentName: agent.name,
+    systemPrompt,
+    defaultModel: agent.model.default,
+    ...(agent.model.premium !== undefined && {
+      premiumModel: agent.model.premium,
+    }),
+    allowedTools,
+    deniedTools: agent.permissions.deny,
+    workspacesDir,
+    memoryDir,
+  }
 }
 
 function resolveBindAddress(bind: string): string {
   if (bind === 'localhost') return '127.0.0.1'
   if (bind === 'tailscale') {
-    const result = spawnSync('tailscale', ['ip', '-4'], { encoding: 'utf-8', timeout: 3000 })
+    const result = spawnSync('tailscale', ['ip', '-4'], {
+      encoding: 'utf-8',
+      timeout: 3000,
+    })
     const ip = result.stdout?.trim()
     if (ip) return ip
-    logger.warn('[openaios]', 'Tailscale IP not found, falling back to 127.0.0.1')
+    logger.warn(
+      '[openaios]',
+      'Tailscale IP not found, falling back to 127.0.0.1',
+    )
     return '127.0.0.1'
   }
   return bind
@@ -408,7 +522,10 @@ function resolvePersona(persona: string): string {
     if (existsSync(path)) {
       return readFileSync(path, 'utf-8')
     }
-    logger.warn('[openaios]', `Persona file not found: ${path} — using as inline string`)
+    logger.warn(
+      '[openaios]',
+      `Persona file not found: ${path} — using as inline string`,
+    )
   }
   return persona
 }

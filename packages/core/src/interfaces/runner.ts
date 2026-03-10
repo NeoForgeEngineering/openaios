@@ -1,27 +1,29 @@
-export interface RunInput {
-  /** Agent name from config */
+export interface AgentConfig {
   agentName: string
-  /** Unique session key (e.g. "telegram:12345678") */
-  sessionKey: string
-  /** Claude Code session ID for --resume, if resuming */
-  claudeSessionId?: string
-  /** User's message */
-  message: string
-  /** System prompt / persona */
+  /** Fully resolved system prompt — persona + skills + memory hint */
   systemPrompt: string
-  /** Absolute path to the agent's isolated workspace */
-  workspaceDir: string
-  /** Tools explicitly allowed for this agent */
+  defaultModel: string
+  premiumModel?: string
   allowedTools: string[]
-  /** Tools explicitly denied for this agent */
   deniedTools: string[]
-  /** Model identifier (e.g. "claude-sonnet-4-5", "ollama/qwen2.5:7b") */
-  model: string
+  /** Base directory; runner creates sessions/{sessionKey}/ within */
+  workspacesDir: string
+  memoryDir: string
+}
+
+export interface RunInput {
+  /** Conversation thread identifier, e.g. "telegram:12345678" */
+  sessionKey: string
+  /** The user's message */
+  message: string
+  /**
+   * Set by router when budget requires a model downgrade for this turn.
+   * Runner uses this instead of its configured defaultModel.
+   */
+  modelOverride?: string
 }
 
 export interface RunResult {
-  /** Claude Code session ID — store for next turn's --resume */
-  claudeSessionId: string
   /** Final text output */
   output: string
   /** Cost in USD, if reported by the runner */
@@ -34,7 +36,13 @@ export interface RunResult {
   model: string
 }
 
-export type StreamChunkType = 'text' | 'thinking' | 'tool_use' | 'tool_result' | 'cost' | 'error'
+export type StreamChunkType =
+  | 'text'
+  | 'thinking'
+  | 'tool_use'
+  | 'tool_result'
+  | 'cost'
+  | 'error'
 
 export interface StreamChunk {
   type: StreamChunkType
@@ -50,6 +58,12 @@ export interface AgentBusRequest {
   message: string
   /** Session key from the calling agent's turn */
   callerSessionKey: string
+  /**
+   * Set by the bus HTTP handler when the request was authenticated via a peer
+   * inbound token rather than the local bus token. Signals that the allowedCallees
+   * check should be skipped — authorization was already enforced at the HTTP layer.
+   */
+  inboundPeer?: string
 }
 
 export interface AgentBusResponse {
@@ -61,17 +75,23 @@ export interface AgentBus {
   request(req: AgentBusRequest): Promise<AgentBusResponse>
 }
 
-export type RunnerMode = 'native' | 'docker'
+export type RunnerEnv = 'native' | 'docker'
 
 export interface RunnerAdapter {
   /** Execute a turn, returning the full result */
   run(input: RunInput): Promise<RunResult>
   /** Execute a turn, yielding chunks as they arrive */
   runStreaming(input: RunInput): AsyncGenerator<StreamChunk, RunResult>
-  /** Whether this runner supports --resume style session continuity */
+  /** Whether this runner supports session continuity across turns */
   supportsSessionResume: boolean
   /** Check if the underlying runtime is reachable */
   healthCheck(): Promise<boolean>
-  /** The mode this runner operates in */
-  mode: RunnerMode
+  /** The environment this runner operates in */
+  env: RunnerEnv
+  /**
+   * Hot-reload the agent's configuration (system prompt, tools, model).
+   * Called when governance rules change — BR platform or local config update.
+   * Takes effect on the next turn without losing session continuity.
+   */
+  reconfigure(config: AgentConfig): void
 }

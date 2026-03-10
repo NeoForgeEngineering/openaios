@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import type {
+  AgentConfig,
   RunInput,
   RunnerAdapter,
   RunResult,
@@ -29,7 +30,6 @@ interface ClaudeStreamMessage {
 
 export interface DockerRunnerOptions {
   orchestrator: ContainerOrchestrator
-  agentName: string
   /** Docker container config (image, memory, cpus) */
   containerConfig?: DockerContainerConfig
   /** Path to the claude binary inside the container. Defaults to 'claude'. */
@@ -38,19 +38,22 @@ export interface DockerRunnerOptions {
 
 /**
  * RunnerAdapter that executes each turn via `docker exec` into a long-lived container.
+ * The runner owns session continuity — maps sessionKey → claudeSessionId internally.
  */
 export class DockerRunner implements RunnerAdapter {
   readonly supportsSessionResume = true
-  readonly mode = 'docker' as const
+  readonly env = 'docker' as const
 
+  private config: AgentConfig
   private readonly orchestrator: ContainerOrchestrator
-  private readonly agentName: string
   private readonly containerConfig: DockerContainerConfig
   private readonly bin: string
+  /** sessionKey → claude Code session ID for --resume */
+  private readonly sessions = new Map<string, string>()
 
-  constructor(opts: DockerRunnerOptions) {
+  constructor(config: AgentConfig, opts: DockerRunnerOptions) {
+    this.config = config
     this.orchestrator = opts.orchestrator
-    this.agentName = opts.agentName
     this.containerConfig = opts.containerConfig ?? {}
     this.bin = opts.bin ?? 'claude'
   }
@@ -69,13 +72,24 @@ export class DockerRunner implements RunnerAdapter {
   }
 
   async *runStreaming(input: RunInput): AsyncGenerator<StreamChunk, RunResult> {
-    await this.orchestrator.ensureRunning(this.agentName, this.containerConfig)
+    await this.orchestrator.ensureRunning(
+      this.config.agentName,
+      this.containerConfig,
+    )
 
-    const claudeArgs = buildClaudeArgs(input)
+    const resumeId = this.sessions.get(input.sessionKey)
+    const model = input.modelOverride ?? this.config.defaultModel
+    const claudeArgs = buildClaudeArgs({
+      config: this.config,
+      message: input.message,
+      model,
+      ...(resumeId !== undefined && { resumeId }),
+    })
+
     // Execute: docker exec <container> claude <args...>
     const dockerArgs = [
       'exec',
-      `openaios-${this.agentName}`,
+      `openaios-${this.config.agentName}`,
       this.bin,
       ...claudeArgs,
     ]
@@ -86,10 +100,11 @@ export class DockerRunner implements RunnerAdapter {
         ...process.env,
         CLAUDE_CODE_INTERACTIVE: '0',
       },
+      stdio: ['ignore', 'pipe', 'pipe'],
     })
 
     let textBuffer = ''
-    let lastClaudeSessionId = input.claudeSessionId ?? ''
+    let lastClaudeSessionId = resumeId ?? ''
     let costUsd: number | undefined
     let inputTokens: number | undefined
     let outputTokens: number | undefined
@@ -164,21 +179,27 @@ export class DockerRunner implements RunnerAdapter {
       )
     }
 
+    // Store session ID for next turn
+    this.sessions.set(input.sessionKey, lastClaudeSessionId)
+
     return {
-      claudeSessionId: lastClaudeSessionId,
       output: finalOutput || textBuffer,
       ...(costUsd !== undefined && { costUsd }),
       ...(inputTokens !== undefined && { inputTokens }),
       ...(outputTokens !== undefined && { outputTokens }),
-      model: input.model,
+      model,
     }
   }
 
+  reconfigure(config: AgentConfig): void {
+    this.config = config
+  }
+
   async healthCheck(): Promise<boolean> {
-    const running = await this.orchestrator.isRunning(this.agentName)
+    const running = await this.orchestrator.isRunning(this.config.agentName)
     if (!running) return false
 
-    const result = await this.orchestrator.exec(this.agentName, [
+    const result = await this.orchestrator.exec(this.config.agentName, [
       'which',
       this.bin,
     ])

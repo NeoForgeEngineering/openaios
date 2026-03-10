@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import type {
+  AgentConfig,
   RunInput,
   RunnerAdapter,
   RunResult,
@@ -33,10 +35,14 @@ interface ClaudeStreamMessage {
 
 export class ClaudeCodeRunner implements RunnerAdapter {
   readonly supportsSessionResume = true
-  readonly mode = 'native' as const
+  readonly env = 'native' as const
+  private config: AgentConfig
   private readonly bin: string
+  /** sessionKey → claude Code session ID for --resume */
+  private readonly sessions = new Map<string, string>()
 
-  constructor(options: ClaudeCodeRunnerOptions = {}) {
+  constructor(config: AgentConfig, options: ClaudeCodeRunnerOptions = {}) {
+    this.config = config
     this.bin = options.bin ?? 'claude'
   }
 
@@ -55,9 +61,18 @@ export class ClaudeCodeRunner implements RunnerAdapter {
   }
 
   async *runStreaming(input: RunInput): AsyncGenerator<StreamChunk, RunResult> {
-    await this.ensureWorkspace(input.workspaceDir)
+    const workspaceDir = this.resolveWorkspace(input.sessionKey)
+    await this.ensureWorkspace(workspaceDir)
 
-    const args = this.buildArgs(input)
+    const resumeId = this.sessions.get(input.sessionKey)
+    const model = input.modelOverride ?? this.config.defaultModel
+    const args = buildClaudeArgs({
+      config: this.config,
+      message: input.message,
+      model,
+      ...(resumeId !== undefined && { resumeId }),
+    })
+
     // Build clean env: strip CLAUDECODE to allow nested claude invocations,
     // and disable interactive prompts.
     const env: Record<string, string | undefined> = {
@@ -67,7 +82,7 @@ export class ClaudeCodeRunner implements RunnerAdapter {
     delete env.CLAUDECODE
 
     const proc = spawn(this.bin, args, {
-      cwd: input.workspaceDir,
+      cwd: workspaceDir,
       env,
       // Do NOT use shell — prevents injection via user message
       shell: false,
@@ -77,7 +92,7 @@ export class ClaudeCodeRunner implements RunnerAdapter {
     })
 
     let textBuffer = ''
-    let lastClaudeSessionId = input.claudeSessionId ?? ''
+    let lastClaudeSessionId = resumeId ?? ''
     let costUsd: number | undefined
     let inputTokens: number | undefined
     let outputTokens: number | undefined
@@ -154,14 +169,20 @@ export class ClaudeCodeRunner implements RunnerAdapter {
       )
     }
 
+    // Store session ID for next turn
+    this.sessions.set(input.sessionKey, lastClaudeSessionId)
+
     return {
-      claudeSessionId: lastClaudeSessionId,
       output: finalOutput || textBuffer,
       ...(costUsd !== undefined && { costUsd }),
       ...(inputTokens !== undefined && { inputTokens }),
       ...(outputTokens !== undefined && { outputTokens }),
-      model: input.model,
+      model,
     }
+  }
+
+  reconfigure(config: AgentConfig): void {
+    this.config = config
   }
 
   async healthCheck(): Promise<boolean> {
@@ -172,8 +193,9 @@ export class ClaudeCodeRunner implements RunnerAdapter {
     })
   }
 
-  private buildArgs(input: RunInput): string[] {
-    return buildClaudeArgs(input)
+  private resolveWorkspace(sessionKey: string): string {
+    const safe = sessionKey.replace(/[^a-zA-Z0-9_-]/g, '_')
+    return join(this.config.workspacesDir, safe)
   }
 
   private async ensureWorkspace(dir: string): Promise<void> {
@@ -187,39 +209,39 @@ export class ClaudeCodeRunner implements RunnerAdapter {
  * Build the CLI arguments for a claude invocation.
  * Exported so DockerRunner can reuse identical arg-building logic.
  */
-export function buildClaudeArgs(input: RunInput): string[] {
+export function buildClaudeArgs(opts: {
+  config: AgentConfig
+  message: string
+  model: string
+  resumeId?: string
+}): string[] {
+  const { config, message, model, resumeId } = opts
   const args: string[] = ['--output-format', 'stream-json', '--verbose']
 
-  if (input.model && input.model !== 'claude-code') {
-    args.push('--model', input.model)
+  if (model && model !== 'claude-code') {
+    args.push('--model', model)
   }
 
   // Only resume if the session ID looks like a real Claude session ID (UUID-like).
-  // Prevents passing invalid IDs from other runners (e.g. Ollama stores the session key).
-  if (
-    input.claudeSessionId &&
-    /^[0-9a-f-]{20,}$/i.test(input.claudeSessionId)
-  ) {
-    args.push('--resume', input.claudeSessionId)
+  if (resumeId && /^[0-9a-f-]{20,}$/i.test(resumeId)) {
+    args.push('--resume', resumeId)
   }
 
-  if (input.systemPrompt) {
-    args.push('--system-prompt', input.systemPrompt)
+  if (config.systemPrompt) {
+    args.push('--system-prompt', config.systemPrompt)
   }
 
-  // Build allowedTools list — deny-by-default
-  if (input.allowedTools.length > 0) {
-    args.push('--allowedTools', input.allowedTools.join(','))
+  if (config.allowedTools.length > 0) {
+    args.push('--allowedTools', config.allowedTools.join(','))
   }
 
-  if (input.deniedTools.length > 0) {
-    args.push('--disallowedTools', input.deniedTools.join(','))
+  if (config.deniedTools.length > 0) {
+    args.push('--disallowedTools', config.deniedTools.join(','))
   }
 
   // SECURITY: `--` end-of-flags separator before user message.
-  // This prevents any user-supplied content from being interpreted as CLI flags.
   args.push('--')
-  args.push(input.message)
+  args.push(message)
 
   return args
 }

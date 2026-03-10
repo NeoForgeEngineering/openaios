@@ -1,9 +1,14 @@
-import { test, describe, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { RouterCore } from '../router-core.js'
-import { MockRunner, MockGovernance, MockSessionStore, MockChannel } from '@openaios/core/testing'
+import { beforeEach, describe, test } from 'node:test'
+import type { BudgetCheckResult, BudgetManager } from '@openaios/budget'
+import {
+  MockChannel,
+  MockGovernance,
+  MockRunner,
+  MockSessionStore,
+} from '@openaios/core/testing'
 import type { AgentRoute } from '../router-core.js'
-import type { BudgetManager, BudgetCheckResult } from '@openaios/budget'
+import { RouterCore } from '../router-core.js'
 
 // ---------------------------------------------------------------------------
 // Minimal BudgetManager mock
@@ -11,8 +16,10 @@ import type { BudgetManager, BudgetCheckResult } from '@openaios/budget'
 function makeMockBudget(override?: Partial<BudgetCheckResult>): BudgetManager {
   const check: BudgetCheckResult = { allowed: true, ...override }
   return {
-    check: (_agentName: string, requestedModel: string) =>
-      ({ ...check, effectiveModel: check.effectiveModel ?? requestedModel }),
+    check: (_agentName: string, requestedModel: string) => ({
+      ...check,
+      effectiveModel: check.effectiveModel ?? requestedModel,
+    }),
     record: () => {},
     close: () => {},
   } as unknown as BudgetManager
@@ -21,13 +28,14 @@ function makeMockBudget(override?: Partial<BudgetCheckResult>): BudgetManager {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function makeRoute(channel: MockChannel, runner: MockRunner, overrides?: Partial<AgentRoute>): AgentRoute {
+function makeRoute(
+  channel: MockChannel,
+  runner: MockRunner,
+  overrides?: Partial<AgentRoute>,
+): AgentRoute {
   return {
     agentName: 'test-agent',
-    systemPrompt: 'Be helpful.',
     defaultModel: 'test-model',
-    allowedTools: ['Read'],
-    deniedTools: [],
     runner,
     channel,
     ...overrides,
@@ -69,18 +77,19 @@ describe('RouterCore', () => {
       sessionStore,
       governance,
       budget,
-      workspacesDir: '/tmp/workspaces',
     })
   }
 
   // AC9: Message > 16KB → error sent, runner not called
   test('rejects messages over 16KB', async () => {
     makeRouter()
-    await channel.simulateMessage(makeInbound({ text: 'x'.repeat(16 * 1024 + 1) }))
+    await channel.simulateMessage(
+      makeInbound({ text: 'x'.repeat(16 * 1024 + 1) }),
+    )
 
     assert.equal(runner.calls.length, 0)
     assert.equal(channel.sent.length, 1)
-    assert.ok(channel.sent[0]!.msg.text.includes('too long'))
+    assert.ok(channel.sent[0]?.msg.text.includes('too long'))
   })
 
   // AC10: Budget exceeded → error sent, runner not called
@@ -91,84 +100,80 @@ describe('RouterCore', () => {
       sessionStore,
       governance,
       budget,
-      workspacesDir: '/tmp/workspaces',
     })
-    void router  // suppress unused warning
+    void router // suppress unused warning
 
     await channel.simulateMessage(makeInbound())
 
     assert.equal(runner.calls.length, 0)
     assert.equal(channel.sent.length, 1)
-    assert.ok(channel.sent[0]!.msg.text.includes('budget'))
+    assert.ok(channel.sent[0]?.msg.text.includes('budget'))
   })
 
-  // AC11: No prior session → runner called without claudeSessionId
-  test('calls runner without claudeSessionId when no prior session', async () => {
+  // AC11: Runner receives sessionKey and message
+  test('calls runner with sessionKey and message', async () => {
     makeRouter()
     await channel.simulateMessage(makeInbound())
 
     assert.equal(runner.calls.length, 1)
-    assert.equal(runner.calls[0]!.claudeSessionId, undefined)
-    assert.equal(runner.calls[0]!.message, 'Hello!')
-    assert.equal(runner.calls[0]!.agentName, 'test-agent')
-  })
-
-  // AC12: Prior session exists → runner called with claudeSessionId
-  test('passes claudeSessionId from prior session to runner', async () => {
-    await sessionStore.set({
-      agentName: 'test-agent',
-      userId: 'mock:user-42',
-      claudeSessionId: 'existing-session-id',
-      currentModel: 'test-model',
-      totalCostUsd: 0,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    })
-
-    makeRouter()
-    await channel.simulateMessage(makeInbound())
-
-    assert.equal(runner.calls[0]!.claudeSessionId, 'existing-session-id')
+    assert.equal(runner.calls[0]?.sessionKey, 'mock:user-42')
+    assert.equal(runner.calls[0]?.message, 'Hello!')
+    assert.equal(runner.calls[0]?.modelOverride, undefined)
   })
 
   // AC13: Runner throws → generic error sent to channel, no crash
   test('sends error message and does not crash when runner throws', async () => {
-    runner.run = async () => { throw new Error('model unavailable') }
+    runner.run = async () => {
+      throw new Error('model unavailable')
+    }
     makeRouter()
 
     await channel.simulateMessage(makeInbound())
 
-    assert.equal(runner.calls.length, 0)  // our mock throws before calls is set
+    assert.equal(runner.calls.length, 0) // our mock throws before calls is set
     assert.equal(channel.sent.length, 1)
-    assert.ok(channel.sent[0]!.msg.text.includes('went wrong'))
+    assert.ok(channel.sent[0]?.msg.text.includes('went wrong'))
   })
 
-  // AC12b: Session is updated after successful turn
+  // AC12b: Session is updated after successful turn (totalCostUsd accumulates)
   test('persists updated session after successful turn', async () => {
-    runner.response = { claudeSessionId: 'new-session-id', output: 'done', costUsd: 0.001 }
+    runner.response = {
+      output: 'done',
+      costUsd: 0.001,
+    }
     makeRouter()
 
     await channel.simulateMessage(makeInbound())
 
-    const session = await sessionStore.get({ agentName: 'test-agent', userId: 'mock:user-42' })
+    const session = await sessionStore.get({
+      agentName: 'test-agent',
+      userId: 'mock:user-42',
+    })
     assert.ok(session)
-    assert.equal(session.claudeSessionId, 'new-session-id')
+    assert.equal(session.totalCostUsd, 0.001)
   })
 
-  // Budget downgrade: effectiveModel differs from defaultModel
-  test('uses downgraded model when budget returns effectiveModel', async () => {
+  // Budget downgrade: effectiveModel differs → modelOverride passed to runner
+  test('passes modelOverride when budget downgrades model', async () => {
     budget = makeMockBudget({ allowed: true, effectiveModel: 'cheap-model' })
     const router = new RouterCore({
       routes: [makeRoute(channel, runner)],
       sessionStore,
       governance,
       budget,
-      workspacesDir: '/tmp/workspaces',
     })
     void router
 
     await channel.simulateMessage(makeInbound())
 
-    assert.equal(runner.calls[0]!.model, 'cheap-model')
+    assert.equal(runner.calls[0]?.modelOverride, 'cheap-model')
+  })
+
+  // No downgrade: modelOverride should be absent
+  test('does not pass modelOverride when model is unchanged', async () => {
+    makeRouter()
+    await channel.simulateMessage(makeInbound())
+
+    assert.equal(runner.calls[0]?.modelOverride, undefined)
   })
 })

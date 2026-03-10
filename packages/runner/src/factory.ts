@@ -1,9 +1,14 @@
-import type { RunnerAdapter, ModelProviders, RunnerConfig } from '@openaios/core'
+import type {
+  AgentConfig,
+  ModelProviders,
+  RunnerAdapter,
+  RunnerConfig,
+} from '@openaios/core'
 import { ClaudeCodeRunner } from './claude-code/runner.js'
+import type { ContainerOrchestrator } from './docker/orchestrator.js'
+import { DockerRunner } from './docker/runner.js'
 import { OllamaRunner } from './ollama/runner.js'
 import { OpenAICompatRunner } from './openai-compat/runner.js'
-import { DockerRunner } from './docker/runner.js'
-import type { ContainerOrchestrator } from './docker/orchestrator.js'
 
 /**
  * Resolve a model string to a provider name.
@@ -23,85 +28,87 @@ export function resolveProvider(model: string): string {
 export interface CreateRunnerOptions {
   /** Required when runnerConfig.mode === 'docker' */
   orchestrator?: ContainerOrchestrator
-  /** Agent name — required when using docker mode */
-  agentName?: string
 }
 
 export function createRunner(
-  model: string,
+  agentConfig: AgentConfig,
   providers: ModelProviders,
   runnerConfig: RunnerConfig,
-  options?: CreateRunnerOptions
+  options?: CreateRunnerOptions,
 ): RunnerAdapter {
   if (runnerConfig.mode === 'docker') {
     if (!options?.orchestrator) {
-      throw new Error('Docker mode requires ContainerOrchestrator (pass via options.orchestrator)')
+      throw new Error(
+        'Docker mode requires ContainerOrchestrator (pass via options.orchestrator)',
+      )
     }
-    if (!options?.agentName) {
-      throw new Error('Docker mode requires agentName (pass via options.agentName)')
-    }
-    return new DockerRunner({
+    return new DockerRunner(agentConfig, {
       orchestrator: options.orchestrator,
-      agentName: options.agentName,
-      ...(runnerConfig.docker !== undefined && { containerConfig: runnerConfig.docker }),
+      ...(runnerConfig.docker !== undefined && {
+        containerConfig: runnerConfig.docker,
+      }),
     })
   }
 
-  const provider = resolveProvider(model)
+  const provider = resolveProvider(agentConfig.defaultModel)
 
   switch (provider) {
     case 'claude-code': {
       const cfg = providers['claude-code']
-      return new ClaudeCodeRunner(cfg?.bin ? { bin: cfg.bin } : {})
+      return new ClaudeCodeRunner(agentConfig, cfg?.bin ? { bin: cfg.bin } : {})
     }
 
     case 'ollama': {
       const cfg = providers.ollama
-      return new OllamaRunner(cfg?.base_url ? { baseUrl: cfg.base_url } : {})
+      return new OllamaRunner(
+        agentConfig,
+        cfg?.base_url ? { baseUrl: cfg.base_url } : {},
+      )
     }
 
     case 'anthropic': {
       const cfg = providers.anthropic
-      if (!cfg) throw new Error('anthropic provider config missing (api_key required)')
-      return new OpenAICompatRunner({
+      if (!cfg)
+        throw new Error('anthropic provider config missing (api_key required)')
+      return new OpenAICompatRunner(agentConfig, {
         apiKey: cfg.api_key,
         baseUrl: cfg.base_url ?? 'https://api.anthropic.com',
-        defaultModel: model.replace(/^anthropic\//, ''),
       })
     }
 
     case 'groq': {
       const cfg = providers.groq
-      if (!cfg) throw new Error('groq provider config missing (api_key required)')
-      return new OpenAICompatRunner({
+      if (!cfg)
+        throw new Error('groq provider config missing (api_key required)')
+      return new OpenAICompatRunner(agentConfig, {
         apiKey: cfg.api_key,
         baseUrl: cfg.base_url ?? 'https://api.groq.com/openai',
-        defaultModel: model.replace(/^groq\//, ''),
       })
     }
 
     case 'openrouter': {
       const cfg = providers.openrouter
-      if (!cfg) throw new Error('openrouter provider config missing (api_key required)')
-      return new OpenAICompatRunner({
+      if (!cfg)
+        throw new Error('openrouter provider config missing (api_key required)')
+      return new OpenAICompatRunner(agentConfig, {
         apiKey: cfg.api_key,
         baseUrl: cfg.base_url ?? 'https://openrouter.ai/api',
-        defaultModel: model.replace(/^openrouter\//, ''),
       })
     }
 
     default:
       // Treat unknown providers as OpenAI-compatible
       if (providers.openai) {
-        return new OpenAICompatRunner({
+        return new OpenAICompatRunner(agentConfig, {
           apiKey: providers.openai.api_key,
-          ...(providers.openai.base_url && { baseUrl: providers.openai.base_url }),
-          defaultModel: model,
+          ...(providers.openai.base_url && {
+            baseUrl: providers.openai.base_url,
+          }),
         })
       }
       throw new Error(
-        `Unknown model provider "${provider}" for model "${model}". ` +
-          `Add a matching provider to your models.providers config.`
+        `Unknown model provider "${provider}" for model "${agentConfig.defaultModel}". ` +
+          `Add a matching provider to your models.providers config.`,
       )
   }
 }
