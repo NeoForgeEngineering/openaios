@@ -117,8 +117,8 @@ agents:
     runner:
       env: external
       external:
-        base_url: http://localhost:18789/v1   # openclaw WebSocket gateway
-        api_key: ${OPENCLAW_KEY}              # optional
+        base_url: http://localhost:18789/v1   # openclaw (local — no key needed)
+        # api_key: ${MY_KEY}                  # optional — for secured/remote endpoints
     permissions:
       allow: [Read, Grep]   # injected as system prompt advisory
 ```
