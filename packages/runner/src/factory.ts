@@ -7,6 +7,7 @@ import type {
 import { ClaudeCodeRunner } from './claude-code/runner.js'
 import type { ContainerOrchestrator } from './docker/orchestrator.js'
 import { DockerRunner } from './docker/runner.js'
+import { ExternalAgentRunner } from './external/runner.js'
 
 export interface CreateRunnerOptions {
   /** Required when runnerConfig.env === 'docker' */
@@ -19,6 +20,20 @@ export function createRunner(
   runnerConfig: RunnerConfig,
   options?: CreateRunnerOptions,
 ): RunnerAdapter {
+  if (runnerConfig.env === 'external') {
+    if (!runnerConfig.external?.base_url) {
+      throw new Error(
+        'External mode requires runner.external.base_url in openAIOS.yml',
+      )
+    }
+    return new ExternalAgentRunner(agentConfig, {
+      baseUrl: runnerConfig.external.base_url,
+      ...(runnerConfig.external.api_key !== undefined && {
+        apiKey: runnerConfig.external.api_key,
+      }),
+    })
+  }
+
   const llmEnv = resolveLlmEnv(runnerConfig)
 
   if (runnerConfig.env === 'docker') {

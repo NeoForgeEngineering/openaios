@@ -3,6 +3,7 @@ import { describe, test } from 'node:test'
 import type { AgentConfig, ModelProviders, RunnerConfig } from '@openaios/core'
 import { ClaudeCodeRunner } from '../claude-code/runner.js'
 import { DockerRunner } from '../docker/runner.js'
+import { ExternalAgentRunner } from '../external/runner.js'
 import { createRunner } from '../factory.js'
 
 // ---------------------------------------------------------------------------
@@ -117,6 +118,46 @@ describe('createRunner — dispatch matrix', () => {
     assert.throws(
       () => createRunner(makeAgentConfig(), emptyProviders, runnerConfig),
       /orchestrator/,
+    )
+  })
+
+  test('external → ExternalAgentRunner with baseUrl', () => {
+    const runnerConfig: RunnerConfig = {
+      env: 'external',
+      llm: 'claude-code',
+      external: { base_url: 'http://localhost:18789/v1' },
+    }
+    const runner = createRunner(makeAgentConfig(), emptyProviders, runnerConfig)
+    assert.ok(runner instanceof ExternalAgentRunner)
+    assert.strictEqual(
+      (runner as unknown as { baseUrl: string }).baseUrl,
+      'http://localhost:18789/v1',
+    )
+  })
+
+  test('external → ExternalAgentRunner with api_key', () => {
+    const runnerConfig: RunnerConfig = {
+      env: 'external',
+      llm: 'claude-code',
+      external: { base_url: 'http://localhost:18789/v1', api_key: 'test-key' },
+    }
+    const runner = createRunner(makeAgentConfig(), emptyProviders, runnerConfig)
+    assert.ok(runner instanceof ExternalAgentRunner)
+    assert.strictEqual(
+      (runner as unknown as { apiKey: string }).apiKey,
+      'test-key',
+    )
+  })
+
+  test('external without base_url → throws', () => {
+    const runnerConfig = {
+      env: 'external' as const,
+      llm: 'claude-code' as const,
+      // external intentionally omitted
+    } as RunnerConfig
+    assert.throws(
+      () => createRunner(makeAgentConfig(), emptyProviders, runnerConfig),
+      /runner\.external\.base_url/,
     )
   })
 })

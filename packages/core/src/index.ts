@@ -37,6 +37,7 @@ export type {
   AgentCapabilities,
   AgentDefinition,
   Config,
+  ExternalRunnerConfig,
   LlmConfig,
   ModelProviders,
   RunnerConfig,

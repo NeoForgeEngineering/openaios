@@ -9,5 +9,6 @@ export {
   ContainerOrchestrator,
   DockerRunner,
 } from './docker/index.js'
+export { ExternalAgentRunner } from './external/runner.js'
 export type { CreateRunnerOptions } from './factory.js'
 export { createRunner } from './factory.js'

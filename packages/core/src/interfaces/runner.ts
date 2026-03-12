@@ -75,7 +75,7 @@ export interface AgentBus {
   request(req: AgentBusRequest): Promise<AgentBusResponse>
 }
 
-export type RunnerEnv = 'native' | 'docker'
+export type RunnerEnv = 'native' | 'docker' | 'external'
 
 export interface RunnerAdapter {
   /** Execute a turn, returning the full result */

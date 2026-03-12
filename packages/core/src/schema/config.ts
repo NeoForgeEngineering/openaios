@@ -44,9 +44,17 @@ const DockerContainerConfigSchema = z.object({
   cpus: z.number().optional(),
 })
 
+/** Config for external agent runners (openclaw, LiteLLM, any OpenAI-compat endpoint) */
+const ExternalRunnerConfigSchema = z.object({
+  /** OpenAI-compat chat completions base URL, e.g. http://localhost:18789/v1 */
+  base_url: z.string(),
+  /** API key presented as Bearer token (optional) */
+  api_key: envString().optional(),
+})
+
 const RunnerConfigSchema = z.object({
   /** WHERE the agent runs */
-  env: z.enum(['docker', 'native']).default('docker'),
+  env: z.enum(['docker', 'native', 'external']).default('docker'),
   /** WHICH LLM drives the agentic loop */
   llm: RunnerLlmSchema,
   /** Gateway config — required when llm !== 'claude-code' */
@@ -55,6 +63,8 @@ const RunnerConfigSchema = z.object({
   native: NativeSafeguardSchema.optional(),
   /** Docker container config */
   docker: DockerContainerConfigSchema.optional(),
+  /** External agent config — required when env === 'external' */
+  external: ExternalRunnerConfigSchema.optional(),
 })
 
 const AgentModelSchema = z.object({
@@ -229,6 +239,7 @@ export type AgentBudgetConfig = z.infer<typeof AgentBudgetSchema>
 export type RunnerConfig = z.infer<typeof RunnerConfigSchema>
 export type RunnerLlm = z.infer<typeof RunnerLlmSchema>
 export type LlmConfig = z.infer<typeof LlmConfigSchema>
+export type ExternalRunnerConfig = z.infer<typeof ExternalRunnerConfigSchema>
 export type ModelProviders = z.infer<typeof ModelProvidersSchema>
 export type AgentCapabilities = z.infer<typeof CapabilitiesSchema>
 export type SkillsConfig = z.infer<typeof SkillsSchema>

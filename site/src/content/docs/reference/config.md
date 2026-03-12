@@ -70,7 +70,7 @@ const AgentPermissionsSchema = z.object({
 ```typescript
 const RunnerConfigSchema = z.object({
   /** WHERE the agent runs */
-  env: z.enum(['docker', 'native']).default('docker'),
+  env: z.enum(['docker', 'native', 'external']).default('docker'),
   /** WHICH LLM drives the agentic loop */
   llm: z.enum(['claude-code', 'openai-compat', 'gemini', 'ollama']).default('claude-code'),
   /** Gateway config — required when llm !== 'claude-code' */
@@ -88,7 +88,39 @@ const RunnerConfigSchema = z.object({
     memory: z.string().optional(),     // e.g. "1g"
     cpus: z.number().optional(),
   }).optional(),
+  /** External agent config — required when env === 'external' */
+  external: z.object({
+    base_url: z.string(),            // OpenAI-compat endpoint, e.g. http://localhost:18789/v1
+    api_key: z.string().optional(),  // Bearer token (optional)
+  }).optional(),
 });
+```
+
+### `env: 'external'` — governance layer mode
+
+When `env` is `external`, openAIOS acts as a **governance and channel layer** only. The agentic loop
+(tool calling, context management, LLM interaction) runs in an external agent system — openclaw,
+LiteLLM, vLLM, or any OpenAI-compatible endpoint.
+
+Budget enforcement, BR governance, session tracking, and channel routing all continue to operate
+unchanged in openAIOS. Session continuity is maintained in-process via an in-memory message history.
+
+Tool restrictions (`permissions.allow` / `permissions.deny`) are expressed as advisory instructions
+in the system prompt rather than hard CLI flags — the external agent is responsible for honouring them.
+
+```yaml
+agents:
+  - name: assistant
+    persona: "You are a helpful assistant."
+    model:
+      default: claude-sonnet-4-6
+    runner:
+      env: external
+      external:
+        base_url: http://localhost:18789/v1   # openclaw WebSocket gateway
+        api_key: ${OPENCLAW_KEY}              # optional
+    permissions:
+      allow: [Read, Grep]   # injected as system prompt advisory
 ```
 
 ## CapabilitiesSchema
