@@ -3,7 +3,7 @@ title: openAIOS
 description: Model-agnostic, secure-by-default AI agent orchestration OS
 template: splash
 hero:
-  tagline: Connect any AI model to any channel with built-in governance, budget tracking, and governed inter-agent communication.
+  tagline: The production runtime for AI agents. Connect any model to any channel with governance, budgets, and multi-agent orchestration — built in, not bolted on.
   actions:
     - text: Get Started
       link: /openaios/getting-started/quickstart/
@@ -18,44 +18,101 @@ sidebar:
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-<CardGrid stagger>
+<div class="stats-row">
+  <div class="stat-item">
+    <div class="stat-value">4</div>
+    <div class="stat-label">LLM Engines</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-value">9</div>
+    <div class="stat-label">Channels</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-value">0</div>
+    <div class="stat-label">Default Permissions</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-value">1</div>
+    <div class="stat-label">Config File</div>
+  </div>
+</div>
+
+<div class="glow-divider"></div>
+
+<div class="terminal-demo">
+  <div class="terminal-bar">
+    <span class="dot"></span>
+    <span class="dot"></span>
+    <span class="dot"></span>
+    <span class="terminal-title">Terminal — openaios</span>
+  </div>
+  <div class="terminal-body">
+    <span class="prompt">$</span> <span class="cmd">openaios start</span><br/>
+    <span class="info">INFO</span> <span class="comment">[core]</span> Loaded config: 2 agent(s)<br/>
+    <span class="info">INFO</span> <span class="comment">[budget]</span> assistant: $0.00 / $10.00 <span class="success">(monthly)</span><br/>
+    <span class="info">INFO</span> <span class="comment">[docker]</span> Container <span class="accent">openaios-coder</span> running<br/>
+    <span class="info">INFO</span> <span class="comment">[tools]</span> Tool registry: 3 built-in tools registered<br/>
+    <span class="info">INFO</span> <span class="comment">[router]</span> Started 2 agent(s)<br/>
+    <span class="success">INFO</span> <span class="comment">[http]</span> Dashboard: <span class="accent">http://localhost:3000</span><br/>
+    <span class="success">INFO</span> <span class="comment">[audit]</span> Security audit: <span class="success">14 passed</span>, <span class="warn">1 warning</span><br/>
+  </div>
+</div>
+
+<div class="glow-divider"></div>
+
+<CardGrid>
   <Card title="Agent Autonomy" icon="rocket">
     Runners are autonomous — configured once at startup, they own their session state, prompt, tools, and workspace. The router is a thin dispatcher.
   </Card>
 
   <Card title="Model-Agnostic" icon="puzzle">
-    Run Claude Code, Ollama, or any OpenAI-compatible model. Switch models per agent or downgrade automatically when budgets run low.
+    Claude Code, Ollama, OpenAI-compatible, or Gemini. Pick the LLM engine per agent. Downgrade automatically when budgets run low.
   </Card>
 
   <Card title="Secure by Default" icon="approve-check-circle">
     Deny-by-default permissions. Agents get zero tools unless explicitly allowed. Budget enforcement blocks runaway spending.
   </Card>
 
-  <Card title="Multi-Channel" icon="comment-alt">
-    Telegram, Discord, Webhook — agents connect to the channels your users already use. One config file, multiple frontends.
+  <Card title="9 Channels" icon="comment-alt">
+    Telegram, Slack, WhatsApp, Signal, Discord, Webhook, iMessage, Google Chat, and Web Chat. One config, every frontend.
   </Card>
 
-  <Card title="Governed Agent Bus" icon="random">
-    Agents call other agents through a two-layer authorization system with budget tracking and circular call detection.
+  <Card title="Semantic Memory" icon="open-book">
+    SQLite-vec powered memory with hybrid search, MMR reranking, temporal decay, and automatic prompt injection.
+  </Card>
+
+  <Card title="Tool Registry" icon="puzzle">
+    Governed tool execution with built-in web fetch, search, PDF parsing, and image analysis. Plugins register custom tools.
   </Card>
 
   <Card title="Docker Isolation" icon="seti:docker">
-    Run agents in long-lived containers with memory/CPU limits, private workspaces, and optional browser sidecars.
+    Sandbox by default — Docker containers with memory/CPU limits, private workspaces, and browser sidecars.
   </Card>
 
-  <Card title="Live Dashboard + TUI" icon="laptop">
-    Web dashboard and terminal UI with live logs, agent status, config editor, and security audit. Hot-reload config without restarting.
+  <Card title="Voice + Canvas" icon="laptop">
+    TTS/STT with 6 providers. A2UI canvas protocol pushes forms, tables, and charts to companion UIs over WebSocket.
   </Card>
 
-  <Card title="Federation (BR Platform)" icon="star">
-    Route agent calls across nodes when using Bot Resources governance. FederatedAgentBus handles cross-node routing with per-peer token auth.
+  <Card title="Automation" icon="star">
+    Cron scheduling and webhook receivers for autonomous agent work. Job history with idempotency dedup.
   </Card>
 
-  <Card title="Skills" icon="document">
-    Inject OpenClaw-compatible SKILL.md files into agent system prompts. Mix and match community skills with your own.
+  <Card title="23-Check Security Audit" icon="approve-check-circle">
+    Continuous auditing: permissions, budgets, channels, memory, browser, automation, gateway, governance, and runtime anomalies.
+  </Card>
+
+  <Card title="Plugins + Skills" icon="document">
+    Plugin registry with manifests, lifecycle management, and SKILL.md auto-discovery for system prompt injection.
+  </Card>
+
+  <Card title="Federation (BR Platform)" icon="random">
+    Governed agent bus with two-layer auth. Federation routes calls across nodes. BR platform for enterprise management.
   </Card>
 </CardGrid>
 
-<div style="text-align: center; margin-top: 2rem;">
-  <img src="/openaios/architecture.svg" alt="openAIOS Architecture" style="max-width: 100%; border-radius: 12px; border: 1px solid #2a3242;" />
+<div class="glow-divider"></div>
+
+<div class="arch-section">
+  <h2>How it all fits together</h2>
+  <img src="/openaios/architecture.svg" alt="openAIOS Architecture" />
 </div>

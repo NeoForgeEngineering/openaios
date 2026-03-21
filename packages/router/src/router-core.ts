@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import type { BudgetManager } from '@openaios/budget'
 import type {
   AgentBus as AgentBusInterface,
@@ -9,6 +10,41 @@ import type {
   SessionStore,
 } from '@openaios/core'
 import { logger } from '@openaios/core'
+
+export type RouterEvent =
+  | {
+      type: 'turn:start'
+      agentName: string
+      userId: string
+      channel: string
+      timestampMs: number
+    }
+  | {
+      type: 'turn:complete'
+      agentName: string
+      userId: string
+      channel: string
+      output: string
+      costUsd?: number
+      model: string
+      durationMs: number
+      timestampMs: number
+    }
+  | {
+      type: 'turn:error'
+      agentName: string
+      userId: string
+      channel: string
+      error: string
+      timestampMs: number
+    }
+  | {
+      type: 'budget:check'
+      agentName: string
+      allowed: boolean
+      effectiveModel?: string
+      timestampMs: number
+    }
 
 export interface AgentRoute {
   agentName: string
@@ -34,6 +70,7 @@ const AGENT_NAME_REGEX = /^[a-z0-9-]+$/
 export class RouterCore {
   private readonly opts: RouterCoreOptions
   private readonly routesByChannel = new Map<ChannelAdapter, AgentRoute>()
+  readonly events = new EventEmitter()
 
   getBus(): AgentBusInterface | undefined {
     return this.opts.bus
@@ -108,7 +145,26 @@ export class RouterCore {
       )
     }
 
-    logger.info('[router]', `${route.agentName} ← ${userId}`)
+    const channelType = route.channel.channelType
+
+    this.events.emit('turn', {
+      type: 'budget:check',
+      agentName: route.agentName,
+      allowed: true,
+      ...(isDowngraded && { effectiveModel }),
+      timestampMs: Date.now(),
+    } satisfies RouterEvent)
+
+    logger.info('[router]', `${route.agentName} ← ${channelType}:${userId}`)
+
+    const turnStartMs = Date.now()
+    this.events.emit('turn', {
+      type: 'turn:start',
+      agentName: route.agentName,
+      userId,
+      channel: channelType,
+      timestampMs: turnStartMs,
+    } satisfies RouterEvent)
 
     try {
       const result = await route.runner.run({
@@ -156,12 +212,33 @@ export class RouterCore {
         `${route.agentName} → ${userId} (${result.costUsd !== undefined ? `$${result.costUsd.toFixed(4)}` : 'no cost'})`,
       )
 
+      this.events.emit('turn', {
+        type: 'turn:complete',
+        agentName: route.agentName,
+        userId,
+        channel: channelType,
+        output: result.output,
+        ...(result.costUsd !== undefined && { costUsd: result.costUsd }),
+        model: result.model,
+        durationMs: Date.now() - turnStartMs,
+        timestampMs: Date.now(),
+      } satisfies RouterEvent)
+
       await route.channel.send(msg.source, {
         text: result.output,
         parseMode: 'markdown',
         replyToMessageId: msg.messageId,
       })
     } catch (err) {
+      this.events.emit('turn', {
+        type: 'turn:error',
+        agentName: route.agentName,
+        userId,
+        channel: channelType,
+        error: err instanceof Error ? err.message : String(err),
+        timestampMs: Date.now(),
+      } satisfies RouterEvent)
+
       logger.error('[router]', `${route.agentName} error`, err)
       await route.channel.send(msg.source, {
         text: 'Sorry, something went wrong. Please try again.',

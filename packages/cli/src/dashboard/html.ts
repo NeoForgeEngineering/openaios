@@ -46,32 +46,11 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   .finding-title { color: #e0e0e0; font-size: 12px; }
   .finding-msg   { color: #888; font-size: 11px; margin-top: 2px; }
   .no-findings { color: #4caf50; font-size: 12px; }
-  /* tab bar */
-  .tab-bar { display: flex; gap: 0; background: #161616; border-bottom: 1px solid #2a2a2a; }
-  .tab-btn { padding: 8px 20px; font-size: 12px; font-family: inherit; background: none; border: none; border-bottom: 2px solid transparent; color: #666; cursor: pointer; letter-spacing: 0.5px; }
-  .tab-btn.active { color: #fff; border-bottom-color: #4caf50; }
-  .tab-btn:hover { color: #ccc; }
-  .tab-panel { display: none; }
-  .tab-panel.active { display: block; }
-  /* configure panel */
-  .cfg-layout { display: grid; grid-template-columns: 180px 1fr; height: calc(100vh - 88px); overflow: hidden; }
-  .cfg-agents { border-right: 1px solid #2a2a2a; overflow-y: auto; padding: 8px 0; }
-  .cfg-agent-item { padding: 8px 16px; cursor: pointer; color: #888; font-size: 12px; }
-  .cfg-agent-item:hover { background: #1a1a1a; color: #ccc; }
-  .cfg-agent-item.selected { background: #1e1e1e; color: #fff; border-left: 2px solid #4caf50; }
-  .cfg-form { padding: 16px; overflow-y: auto; }
-  .cfg-form h3 { font-size: 13px; color: #fff; margin-bottom: 14px; }
-  .cfg-field { margin-bottom: 14px; }
-  .cfg-label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; }
-  .cfg-textarea { width: 100%; background: #161616; border: 1px solid #2a2a2a; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 8px; border-radius: 3px; resize: vertical; min-height: 70px; }
-  .cfg-textarea:focus { outline: none; border-color: #4caf50; }
-  .cfg-checkboxes { display: flex; flex-wrap: wrap; gap: 8px; }
-  .cfg-checkbox-label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #aaa; cursor: pointer; }
-  .cfg-checkbox-label input { accent-color: #4caf50; }
-  .cfg-save-btn { background: #1a2e1a; border: 1px solid #2d5a2d; color: #4caf50; font-family: inherit; font-size: 12px; padding: 7px 18px; border-radius: 3px; cursor: pointer; }
-  .cfg-save-btn:hover { background: #2d5a2d; }
-  .cfg-toast { display: inline-block; margin-left: 12px; color: #4caf50; font-size: 12px; opacity: 0; transition: opacity 0.3s; }
-  .cfg-toast.show { opacity: 1; }
+  /* nav bar */
+  .nav-bar { display: flex; gap: 0; background: #161616; border-bottom: 1px solid #2a2a2a; align-items: center; }
+  .nav-link { padding: 8px 20px; font-size: 12px; font-family: inherit; background: none; border: none; border-bottom: 2px solid transparent; color: #666; cursor: pointer; letter-spacing: 0.5px; text-decoration: none; display: inline-block; }
+  .nav-link.active { color: #fff; border-bottom-color: #4caf50; }
+  .nav-link:hover { color: #ccc; }
 </style>
 </head>
 <body>
@@ -83,12 +62,14 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   <span class="version">v0.1</span>
 </header>
 
-<div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('status')">Status</button>
-  <button class="tab-btn" onclick="switchTab('configure')">Configure</button>
+<div class="nav-bar">
+  <span class="nav-link active">Status</span>
+  <a class="nav-link" href="/live">Live Flow</a>
+  <a class="nav-link" href="/config">Configure</a>
+  <a class="nav-link" href="/chat">Chat</a>
 </div>
 
-<div id="tab-status" class="tab-panel active">
+<div>
 
 <div class="grid">
   <div class="panel">
@@ -99,6 +80,26 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
     <div class="panel-title">Live Logs</div>
     <div id="log-panel"></div>
   </div>
+</div>
+
+<div class="sessions-section">
+  <div class="panel-title" style="margin-bottom:8px">Agent Metrics</div>
+  <table>
+    <thead><tr>
+      <th>agent</th><th>turns</th><th>tokens (in/out)</th><th>cost</th><th>avg duration</th><th>tools</th><th>errors</th>
+    </tr></thead>
+    <tbody id="metrics-body"><tr><td colspan="7" style="color:#555">Loading...</td></tr></tbody>
+  </table>
+</div>
+
+<div class="sessions-section">
+  <div class="panel-title" style="margin-bottom:8px">Recent Turns</div>
+  <table>
+    <thead><tr>
+      <th>agent</th><th>channel</th><th>model</th><th>duration</th><th>cost</th><th>when</th>
+    </tr></thead>
+    <tbody id="turns-body"><tr><td colspan="6" style="color:#555">Loading...</td></tr></tbody>
+  </table>
 </div>
 
 <div class="sessions-section">
@@ -119,127 +120,13 @@ export const DASHBOARD_HTML = `<!DOCTYPE html>
   <div id="audit-findings"></div>
 </div>
 
-</div><!-- end tab-status -->
-
-<div id="tab-configure" class="tab-panel">
-  <div class="cfg-layout">
-    <div class="cfg-agents" id="cfg-agents-list"></div>
-    <div class="cfg-form" id="cfg-form">
-      <div style="color:#555;font-size:12px">Select an agent to configure</div>
-    </div>
-  </div>
 </div>
 
 <script>
 const MAX_LOG_LINES = 200
 
-// ── Tab management ─────────────────────────────────────────────────
-function switchTab(name) {
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
-  document.getElementById('tab-' + name).classList.add('active')
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    if (b.textContent.toLowerCase().trim() === name) b.classList.add('active')
-  })
-  if (name === 'configure') loadConfigure()
-}
-
-// ── Configure tab ──────────────────────────────────────────────────
-let cfgAgents = []
-let cfgSkills = []
-let cfgSelected = null
-
-async function loadConfigure() {
-  try {
-    const [cfgRes, skillsRes] = await Promise.all([fetch('/api/config'), fetch('/api/skills')])
-    const cfgData = await cfgRes.json()
-    const skillsData = await skillsRes.json()
-    cfgAgents = cfgData.agents || []
-    cfgSkills = skillsData.skills || []
-    renderCfgAgentList()
-  } catch {}
-}
-
-function renderCfgAgentList() {
-  const el = document.getElementById('cfg-agents-list')
-  el.innerHTML = cfgAgents.map((a, i) => {
-    const sel = cfgSelected === a.name ? ' selected' : ''
-    return \`<div class="cfg-agent-item\${sel}" onclick="selectCfgAgent('\${a.name}')">\${a.name}</div>\`
-  }).join('')
-}
-
-function selectCfgAgent(name) {
-  cfgSelected = name
-  renderCfgAgentList()
-  const agent = cfgAgents.find(a => a.name === name)
-  if (!agent) return
-  const form = document.getElementById('cfg-form')
-  const skillCheckboxes = cfgSkills.map(s => {
-    const checked = (agent.skills || []).includes(s.name) ? 'checked' : ''
-    return \`<label class="cfg-checkbox-label"><input type="checkbox" \${checked} data-skill="\${s.name}"> \${s.name}\${s.description ? ' — ' + s.description : ''}</label>\`
-  }).join('')
-  form.innerHTML = \`
-    <h3>EDIT: \${name}</h3>
-    <div class="cfg-field">
-      <div class="cfg-label">Persona</div>
-      <textarea class="cfg-textarea" id="cfg-persona" rows="4">\${escapeHtml(agent.persona || '')}</textarea>
-    </div>
-    <div class="cfg-field">
-      <div class="cfg-label">Skills</div>
-      <div class="cfg-checkboxes" id="cfg-skills">\${skillCheckboxes || '<span style="color:#555">No skills available</span>'}</div>
-    </div>
-    <div class="cfg-field">
-      <div class="cfg-label">Capabilities</div>
-      <label class="cfg-checkbox-label"><input type="checkbox" id="cfg-browser" \${agent.capabilities?.browser ? 'checked' : ''}> Browser</label>
-    </div>
-    <div class="cfg-field">
-      <div class="cfg-label">Permissions allow (one per line)</div>
-      <textarea class="cfg-textarea" id="cfg-allow" rows="4">\${(agent.permissions?.allow || []).join('\\n')}</textarea>
-    </div>
-    <div class="cfg-field">
-      <div class="cfg-label">Permissions deny (one per line)</div>
-      <textarea class="cfg-textarea" id="cfg-deny" rows="3">\${(agent.permissions?.deny || []).join('\\n')}</textarea>
-    </div>
-    <button class="cfg-save-btn" onclick="saveCfgAgent('\${name}')">Save Changes</button>
-    <span class="cfg-toast" id="cfg-toast">✓ Saved — changes active</span>
-  \`
-}
-
 function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
-}
-
-async function saveCfgAgent(name) {
-  const persona = document.getElementById('cfg-persona').value
-  const skills = Array.from(document.querySelectorAll('[data-skill]:checked')).map(el => el.dataset.skill)
-  const browser = document.getElementById('cfg-browser').checked
-  const allow = document.getElementById('cfg-allow').value.split('\\n').map(s=>s.trim()).filter(Boolean)
-  const deny = document.getElementById('cfg-deny').value.split('\\n').map(s=>s.trim()).filter(Boolean)
-
-  try {
-    const res = await fetch('/api/config/agents/' + encodeURIComponent(name), {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ persona, skills, capabilities: { browser }, permissions: { allow, deny } })
-    })
-    if (res.status === 204) {
-      // Update local snapshot
-      const agent = cfgAgents.find(a => a.name === name)
-      if (agent) {
-        agent.persona = persona
-        agent.skills = skills
-        agent.capabilities = { ...agent.capabilities, browser }
-        agent.permissions = { allow, deny }
-      }
-      const toast = document.getElementById('cfg-toast')
-      toast.classList.add('show')
-      setTimeout(() => toast.classList.remove('show'), 3000)
-    } else {
-      alert('Save failed: ' + res.status)
-    }
-  } catch (err) {
-    alert('Save failed: ' + err)
-  }
 }
 
 function timeAgo(ms) {
@@ -370,17 +257,64 @@ async function loadAudit() {
   } catch {}
 }
 
+async function loadMetrics() {
+  try {
+    const res = await fetch('/api/metrics')
+    const data = await res.json()
+    const tbody = document.getElementById('metrics-body')
+    const metrics = data.metrics || []
+    if (metrics.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="color:#555">No data yet — send some messages</td></tr>'
+      return
+    }
+    tbody.innerHTML = metrics.map(m => \`<tr>
+      <td>\${m.agentName}</td>
+      <td>\${m.turns}</td>
+      <td>\${(m.totalInputTokens || 0).toLocaleString()} / \${(m.totalOutputTokens || 0).toLocaleString()}</td>
+      <td>$\${(m.totalCostUsd || 0).toFixed(4)}</td>
+      <td>\${m.avgDurationMs ? (m.avgDurationMs / 1000).toFixed(1) + 's' : '—'}</td>
+      <td>\${m.toolCalls || 0}</td>
+      <td style="color:\${m.errors > 0 ? '#f44336' : '#555'}">\${m.errors || 0}</td>
+    </tr>\`).join('')
+  } catch {}
+}
+
+async function loadTurns() {
+  try {
+    const res = await fetch('/api/turns')
+    const data = await res.json()
+    const tbody = document.getElementById('turns-body')
+    const turns = data.turns || []
+    if (turns.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="color:#555">No turns recorded yet</td></tr>'
+      return
+    }
+    tbody.innerHTML = turns.slice(0, 20).map(t => \`<tr>
+      <td>\${t.agentName}</td>
+      <td>\${t.channel}</td>
+      <td style="color:#888;font-size:11px">\${t.model}</td>
+      <td>\${(t.durationMs / 1000).toFixed(1)}s</td>
+      <td>$\${(t.costUsd || 0).toFixed(4)}</td>
+      <td>\${timeAgo(t.timestampMs)}</td>
+    </tr>\`).join('')
+  } catch {}
+}
+
 // Initial load
 loadStatus()
 loadSessions()
 loadLogs()
 loadAudit()
+loadMetrics()
+loadTurns()
 
 // Auto-refresh every 10s
 setInterval(() => {
   loadStatus()
   loadSessions()
   loadAudit()
+  loadMetrics()
+  loadTurns()
 }, 10000)
 
 // SSE live log stream

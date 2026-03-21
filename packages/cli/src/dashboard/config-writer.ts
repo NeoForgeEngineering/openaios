@@ -1,12 +1,25 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { isMap, isSeq, parseDocument } from 'yaml'
 
+export interface ChannelPatch {
+  telegram?: { token: string } | null
+  slack?: { token: string; app_token: string; signing_secret?: string } | null
+  whatsapp?: { session_name?: string } | null
+  signal?: { phone_number: string } | null
+  webhook?: { path: string; secret?: string } | null
+  discord?: { token: string; guildId?: string } | null
+  google_chat?: { path: string } | null
+  imessage?: { poll_interval_ms?: number } | null
+}
+
 export interface AgentPatch {
   persona?: string
+  model?: { default: string; premium?: string }
   skills?: string[]
   allowedTools?: string[] // permissions.allow
   deniedTools?: string[] // permissions.deny
   browser?: boolean // capabilities.browser
+  channels?: ChannelPatch
 }
 
 export function patchAgentInConfig(
@@ -34,6 +47,21 @@ export function patchAgentInConfig(
     doc.setIn(['agents', idx, 'permissions', 'deny'], patch.deniedTools)
   if (patch.browser !== undefined)
     doc.setIn(['agents', idx, 'capabilities', 'browser'], patch.browser)
+  if (patch.model !== undefined) {
+    doc.setIn(['agents', idx, 'model', 'default'], patch.model.default)
+    if (patch.model.premium !== undefined) {
+      doc.setIn(['agents', idx, 'model', 'premium'], patch.model.premium)
+    }
+  }
+  if (patch.channels !== undefined) {
+    for (const [channel, value] of Object.entries(patch.channels)) {
+      if (value === null) {
+        doc.deleteIn(['agents', idx, 'channels', channel])
+      } else {
+        doc.setIn(['agents', idx, 'channels', channel], value)
+      }
+    }
+  }
 
   writeFileSync(configPath, doc.toString(), 'utf-8')
 }

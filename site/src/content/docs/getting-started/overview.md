@@ -11,16 +11,24 @@ Think of it as a production-grade runtime for deploying AI agents — not just a
 
 ## What it does
 
-- **Channel → Agent → Channel** — messages arrive via Telegram/Discord/Webhook, get processed by an autonomous runner, responses are sent back
+- **9 channels** — Telegram, Slack, WhatsApp, Signal, Discord, Webhook, Web Chat, iMessage, Google Chat
 - **Autonomous runners** — agents are configured once at startup and own their own session state, system prompt, tools, and workspace
-- **Long-lived Docker containers** — agents run in persistent containers (`docker exec` per turn), not ephemeral processes
-- **Agent bus** — governed request/response between agents within policy bounds
+- **Docker sandbox by default** — agents run in persistent containers with memory/CPU limits and private workspaces
+- **Tool registry** — governed tool execution with built-in web fetch, search, PDF parsing, image analysis + plugin tools
+- **Semantic memory** — SQLite-vec backed with hybrid search (FTS5 + vector), MMR reranking, temporal decay, and prompt injection
 - **Budget tracking** — per-agent spending limits with block/downgrade/warn actions
-- **Deny-by-default permissions** — agents only get the tools you explicitly allow
-- **Hot-reload** — change agent config (persona, skills, permissions) via `reconfigure()` without restarting or losing sessions
-- **Skills** — inject OpenClaw-compatible `SKILL.md` files into agent system prompts
-- **Live dashboard + TUI** — real-time web UI and terminal UI with logs, status, config editing, and security audit
-- **Federation (BR platform)** — route agent calls across nodes when using Bot Resources governance
+- **Deny-by-default permissions** — agents get zero tools unless explicitly allowed
+- **23-check security audit** — continuous scanning for misconfigurations and runtime anomalies
+- **Cron + webhooks** — scheduled tasks and inbound event processing for autonomous agent work
+- **Browser automation** — governed headless browser with navigate, click, fill, snapshot, screenshot tools
+- **Voice** — TTS (ElevenLabs, OpenAI, Edge, system) and STT (Deepgram, Whisper) with channel wrapper
+- **Canvas (A2UI)** — agent-driven visual workspaces with forms, tables, charts over WebSocket
+- **Plugins** — plugin registry with manifests, lifecycle, and SKILL.md auto-discovery
+- **Agent bus** — governed inter-agent calls with two-layer auth and budget tracking
+- **Multi-model** — model catalog, API key rotation with 429 cooldown, reasoning modes (standard/fast/deep)
+- **WS gateway** — JSON-RPC 2.0 WebSocket API with event streaming and presence tracking
+- **Hot-reload** — change agent config via dashboard or API without restarting
+- **Federation (BR platform)** — route agent calls across nodes with per-peer token auth
 
 ## Core design principles
 
@@ -57,19 +65,30 @@ Systemd/launchd service management, structured JSON logging, Tailscale-first net
 
 ![openAIOS Architecture](/openaios/architecture.svg)
 
-## Package structure
+## Package structure (17 packages)
 
 ```
 packages/
-├── core/       — Zod schemas, TypeScript interfaces, config loader, logger
-├── runner/     — ClaudeCodeRunner (native), DockerRunner (docker exec), factory
-├── budget/     — SQLite-backed BudgetManager
-├── governance/ — LocalGovernance (in-process), BRGovernance (external API)
-├── router/     — RouterCore, AgentBus, SessionStore
-├── channels/   — TelegramAdapter, WebhookAdapter, DiscordAdapter
-├── cli/        — openaios start|status|init|audit|tui|service|upgrade
+├── core/        — Zod schemas, interfaces, config loader, logger, testing mocks
+├── runner/      — ClaudeCode, Docker, External, Anthropic SDK, OpenAI SDK runners
+│                  + ModelCatalog, AuthRotation, reasoning modes
+├── router/      — RouterCore, AgentBus, WS Gateway, health endpoints, sessions
+├── channels/    — 9 adapters + shared utils (chunker, group router, allowlist)
+├── governance/  — Local + BR governance, rate limiter, path policy, DM pairing, audit log
+├── budget/      — SQLite-backed BudgetManager
+├── tools/       — ToolRegistry, ToolExecutor, built-in tools (fetch, search, PDF, image)
+├── memory/      — SQLite-vec MemoryStore, hybrid search, embeddings, prompt injector
+├── automation/  — CronScheduler, WebhookReceiver, JobHistory
+├── browser/     — agent-browser client, URL governance, session manager
+├── voice/       — TTS (4 providers), STT (2 providers), VoiceChannel wrapper
+├── canvas/      — A2UI protocol, CanvasServer (WS), 5 component types
+├── plugins/     — PluginRegistry, manifests, lifecycle, SKILL.md loader
+├── cli/         — openaios start|status|init|audit|tui|service|upgrade
+│                  + dashboard, chat UI, config UI
+├── br-sdk/      — Bot Resources platform client
+├── br-hook/     — Bot Resources webhook handler
 └── images/
-    └── agent/  — Docker image (node:22 + claude CLI + call_agent tool)
+    └── agent/   — Docker image (node:22 + claude CLI + call_agent tool)
 ```
 
 ## Next steps

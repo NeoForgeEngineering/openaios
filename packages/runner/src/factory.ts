@@ -8,10 +8,18 @@ import { ClaudeCodeRunner } from './claude-code/runner.js'
 import type { ContainerOrchestrator } from './docker/orchestrator.js'
 import { DockerRunner } from './docker/runner.js'
 import { ExternalAgentRunner } from './external/runner.js'
+import type { ToolGate } from './providers/anthropic-sdk.js'
+import { OpenAiSdkRunner } from './providers/openai-sdk.js'
 
 export interface CreateRunnerOptions {
   /** Required when runnerConfig.env === 'docker' */
   orchestrator?: ContainerOrchestrator
+  /**
+   * Governed tool executor — when provided, external runners use
+   * OpenAiSdkRunner with a full tool-use loop instead of the
+   * chat-only ExternalAgentRunner.
+   */
+  toolGate?: ToolGate
 }
 
 export function createRunner(
@@ -26,6 +34,18 @@ export function createRunner(
         'External mode requires runner.external.base_url in openAIOS.yml',
       )
     }
+
+    // When a ToolGate is provided, use the governed OpenAI SDK runner
+    // with full tool-use loop. Every tool call goes through governance.
+    if (options?.toolGate) {
+      return new OpenAiSdkRunner(agentConfig, {
+        apiKey: runnerConfig.external.api_key ?? '',
+        baseUrl: runnerConfig.external.base_url,
+        toolGate: options.toolGate,
+      })
+    }
+
+    // Fallback: chat-only external runner (no tool governance)
     return new ExternalAgentRunner(agentConfig, {
       baseUrl: runnerConfig.external.base_url,
       ...(runnerConfig.external.api_key !== undefined && {

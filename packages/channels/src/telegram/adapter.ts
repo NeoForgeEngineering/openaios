@@ -22,25 +22,54 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   private setupHandlers(): void {
+    // Handle /start — Telegram sends this when a user first opens the chat
+    this.bot.command('start', async (ctx) => {
+      await ctx.reply(
+        "Hello! I'm an openAIOS agent. Send me a message to get started.",
+      )
+    })
+
+    // Handle /help
+    this.bot.command('help', async (ctx) => {
+      await ctx.reply(
+        "Just send me a message and I'll do my best to help. I'm powered by openAIOS.",
+      )
+    })
+
     this.bot.on('message:text', async (ctx) => {
       if (!this.handler) return
       if (!ctx.message.text) return
+      // Skip any other bot commands we didn't handle above
+      if (ctx.message.text.startsWith('/')) return
+
+      const chatId = ctx.chat.id
+
+      // Send "typing" indicator and keep it alive while agent works
+      const typingInterval = setInterval(() => {
+        ctx.api.sendChatAction(chatId, 'typing').catch(() => {})
+      }, 4000)
+      // Fire immediately too (interval waits before first tick)
+      ctx.api.sendChatAction(chatId, 'typing').catch(() => {})
 
       const msg: InboundMessage = {
         messageId: String(ctx.message.message_id),
         source: {
-          id: String(ctx.chat.id),
+          id: String(chatId),
           ...(ctx.message.message_thread_id !== undefined && {
             threadId: String(ctx.message.message_thread_id),
           }),
         },
-        userId: String(ctx.from?.id ?? ctx.chat.id),
+        userId: String(ctx.from?.id ?? chatId),
         userName: ctx.from?.username ?? ctx.from?.first_name,
         text: ctx.message.text,
         timestamp: ctx.message.date,
       }
 
-      await this.handler(msg)
+      try {
+        await this.handler(msg)
+      } finally {
+        clearInterval(typingInterval)
+      }
     })
 
     this.bot.catch((err) => {

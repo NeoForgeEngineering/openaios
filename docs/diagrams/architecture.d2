@@ -1,4 +1,4 @@
-direction: right
+direction: down
 
 title: openAIOS Architecture {
   shape: text
@@ -7,188 +7,245 @@ title: openAIOS Architecture {
   near: top-center
 }
 
-# --- Channels ---
+# ─── Users & External ─────────────────────────────────────
+
+users: Users {
+  shape: person
+  style.fill: "#e8f0fe"
+}
+
+# ─── Channels Layer ───────────────────────────────────────
+
 channels: Channels {
   style.fill: "#1a1a2e"
-  style.stroke: "#e94560"
-  style.font-color: "#ffffff"
+  style.stroke: "#4f8fff"
 
-  telegram: Telegram Bot {
-    shape: image
-    icon: https://cdn.simpleicons.org/telegram/26A5E4
-  }
-  discord: Discord Bot {
-    shape: image
-    icon: https://cdn.simpleicons.org/discord/5865F2
-  }
-  webhook: Webhook (HTTP) {
-    shape: hexagon
+  telegram: Telegram {style.fill: "#0088cc"; style.font-color: "#fff"}
+  slack: Slack {style.fill: "#4a154b"; style.font-color: "#fff"}
+  whatsapp: WhatsApp {style.fill: "#25d366"; style.font-color: "#000"}
+  signal: Signal {style.fill: "#3a76f0"; style.font-color: "#fff"}
+  webhook: Webhook {style.fill: "#2a2a2a"; style.font-color: "#ccc"}
+  webchat: Web Chat {style.fill: "#2a2a2a"; style.font-color: "#ccc"}
+  discord: Discord {style.fill: "#5865f2"; style.font-color: "#fff"}
+  gchat: Google Chat {style.fill: "#1a73e8"; style.font-color: "#fff"}
+  imessage: iMessage {style.fill: "#34c759"; style.font-color: "#fff"}
+
+  shared: "Shared: chunker, group router, DM allowlist, threader" {
     style.fill: "#16213e"
-    style.font-color: "#e94560"
+    style.font-color: "#888"
+    style.font-size: 12
   }
 }
 
-# --- Router (thin dispatcher) ---
-router: RouterCore (Mailroom) {
-  style.fill: "#0f3460"
-  style.stroke: "#e94560"
-  style.font-color: "#ffffff"
-  style.border-radius: 12
+# ─── Core Engine ──────────────────────────────────────────
 
-  dispatch: "Dispatch: { sessionKey, message }" {
-    style.font-color: "#00d2ff"
+engine: openAIOS Engine {
+  style.fill: "#0d0d0d"
+  style.stroke: "#4caf50"
+  style.font-color: "#fff"
+  style.font-size: 20
+
+  # Router
+  router: Router {
+    style.fill: "#161616"
+    style.stroke: "#4caf50"
+    style.font-color: "#4caf50"
+
+    core: RouterCore {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    bus: AgentBus {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    ws: WS Gateway (JSON-RPC) {style.fill: "#1e1e1e"; style.font-color: "#03a9f4"}
+    health: /health + /ready {style.fill: "#1e1e1e"; style.font-color: "#888"}
+    sessions: Sessions (SQLite) {shape: cylinder; style.fill: "#1e1e1e"; style.font-color: "#888"}
   }
 
-  cost: "Cost tracking (SessionStore)" {
-    shape: cylinder
-    style.fill: "#16213e"
-    style.font-color: "#50fa7b"
+  # Governance
+  gov: Governance {
+    style.fill: "#161616"
+    style.stroke: "#f44336"
+    style.font-color: "#f44336"
+
+    local: LocalGovernance {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    br: BR Governance {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    rate: Rate Limiter {style.fill: "#1e1e1e"; style.font-color: "#888"}
+    paths: Path Policy {style.fill: "#1e1e1e"; style.font-color: "#888"}
+    pairing: DM Pairing {style.fill: "#1e1e1e"; style.font-color: "#888"}
+    audit: Audit Log (SQLite) {shape: cylinder; style.fill: "#1e1e1e"; style.font-color: "#888"}
   }
 
-  budget: BudgetManager {
-    shape: cylinder
-    style.fill: "#16213e"
-    style.font-color: "#50fa7b"
+  # Budget
+  budget: Budget {
+    style.fill: "#161616"
+    style.stroke: "#ff9800"
+    style.font-color: "#ff9800"
+    mgr: BudgetManager (SQLite) {shape: cylinder; style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
   }
 
-  dispatch -> cost: record spend
-  dispatch -> budget: check / downgrade
+  # Runners
+  runners: Runners {
+    style.fill: "#161616"
+    style.stroke: "#ff9800"
+    style.font-color: "#ff9800"
+
+    claude: ClaudeCodeRunner {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    docker: DockerRunner {style.fill: "#1e1e1e"; style.font-color: "#bd93f9"}
+    external: ExternalRunner {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    anthro_sdk: Anthropic SDK {style.fill: "#1e1e1e"; style.font-color: "#888"}
+    openai_sdk: OpenAI SDK {style.fill: "#1e1e1e"; style.font-color: "#888"}
+    catalog: ModelCatalog {style.fill: "#1e1e1e"; style.font-color: "#555"}
+    auth: AuthRotation {style.fill: "#1e1e1e"; style.font-color: "#555"}
+    reasoning: Reasoning Modes {style.fill: "#1e1e1e"; style.font-color: "#555"}
+  }
+
+  # Tools
+  tools: Tools {
+    style.fill: "#161616"
+    style.stroke: "#9c27b0"
+    style.font-color: "#9c27b0"
+
+    registry: ToolRegistry {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    executor: ToolExecutor {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    builtins: "web_fetch, web_search, pdf_parse, image_analyze" {style.fill: "#1e1e1e"; style.font-color: "#888"; style.font-size: 12}
+  }
+
+  # Memory
+  memory: Memory {
+    style.fill: "#161616"
+    style.stroke: "#00bcd4"
+    style.font-color: "#00bcd4"
+
+    store: MemoryStore (SQLite + vec) {shape: cylinder; style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    hybrid: "Hybrid Search (FTS5 + vector + MMR)" {style.fill: "#1e1e1e"; style.font-color: "#888"; style.font-size: 12}
+    embed: "Embeddings: OpenAI, Ollama, Voyage, Mistral, Gemini" {style.fill: "#1e1e1e"; style.font-color: "#888"; style.font-size: 12}
+    inject: Prompt Injector {style.fill: "#1e1e1e"; style.font-color: "#888"}
+  }
+
+  # Automation
+  auto: Automation {
+    style.fill: "#161616"
+    style.stroke: "#8bc34a"
+    style.font-color: "#8bc34a"
+
+    cron: CronScheduler (RRULE) {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    hooks: WebhookReceiver {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    history: JobHistory (SQLite) {shape: cylinder; style.fill: "#1e1e1e"; style.font-color: "#888"}
+  }
+
+  # Browser
+  browser: Browser {
+    style.fill: "#161616"
+    style.stroke: "#e91e63"
+    style.font-color: "#e91e63"
+
+    client: agent-browser CLI {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    url_gov: URL Governance {style.fill: "#1e1e1e"; style.font-color: "#888"}
+  }
+
+  # Voice
+  voice: Voice {
+    style.fill: "#161616"
+    style.stroke: "#673ab7"
+    style.font-color: "#673ab7"
+
+    tts: "TTS: ElevenLabs, OpenAI, Edge, System" {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"; style.font-size: 12}
+    stt: "STT: Deepgram, Whisper" {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"; style.font-size: 12}
+  }
+
+  # Canvas
+  canvas: Canvas (A2UI) {
+    style.fill: "#161616"
+    style.stroke: "#03a9f4"
+    style.font-color: "#03a9f4"
+
+    server: Canvas Server (WS) {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    components: "form, table, chart, button, markdown" {style.fill: "#1e1e1e"; style.font-color: "#888"; style.font-size: 12}
+  }
+
+  # Plugins
+  plugins: Plugins {
+    style.fill: "#161616"
+    style.stroke: "#795548"
+    style.font-color: "#795548"
+
+    reg: PluginRegistry {style.fill: "#1e1e1e"; style.font-color: "#e0e0e0"}
+    skills: SKILL.md Loader {style.fill: "#1e1e1e"; style.font-color: "#888"}
+    lifecycle: Lifecycle FSM {style.fill: "#1e1e1e"; style.font-color: "#888"}
+  }
 }
 
-# --- Autonomous Runners ---
-runners: Autonomous Runners (own config + sessions) {
+# ─── CLI & UI ─────────────────────────────────────────────
+
+cli: CLI & Dashboard {
   style.fill: "#1a1a2e"
-  style.stroke: "#50fa7b"
-  style.font-color: "#ffffff"
+  style.stroke: "#607d8b"
 
-  native: "ClaudeCodeRunner (env: native)" {
-    style.fill: "#16213e"
-    style.font-color: "#00d2ff"
-  }
-  docker: "DockerRunner (env: docker)" {
+  start: "openaios start" {style.fill: "#16213e"; style.font-color: "#e0e0e0"}
+  audit_cmd: "openaios audit (23 checks)" {style.fill: "#16213e"; style.font-color: "#e0e0e0"}
+  status: "/ Status" {style.fill: "#16213e"; style.font-color: "#e0e0e0"}
+  config_ui: "/config Configure" {style.fill: "#16213e"; style.font-color: "#e0e0e0"}
+  chat_ui: "/chat Web Chat" {style.fill: "#16213e"; style.font-color: "#e0e0e0"}
+}
+
+# ─── LLM APIs ────────────────────────────────────────────
+
+llms: LLM APIs {
+  style.fill: "#1a1a2e"
+  style.stroke: "#ff9800"
+
+  anthropic: Anthropic {style.fill: "#d4a574"; style.font-color: "#000"}
+  openai: OpenAI {style.fill: "#74aa9c"; style.font-color: "#000"}
+  ollama: Ollama (local) {style.fill: "#2a2a2a"; style.font-color: "#ccc"}
+  others: "OpenRouter, Groq, etc." {style.fill: "#2a2a2a"; style.font-color: "#888"}
+}
+
+# ─── Docker ───────────────────────────────────────────────
+
+containers: Docker Sandbox {
+  style.fill: "#1a1a2e"
+  style.stroke: "#bd93f9"
+
+  sandbox: "Isolated filesystem, cgroup limits, no host access" {
     style.fill: "#16213e"
     style.font-color: "#bd93f9"
-  }
-  llm: "runner.llm: claude-code | openai-compat | gemini | ollama" {
-    style.fill: "#16213e"
-    style.font-color: "#f5a623"
-    style.font-size: 13
-  }
-
-  config: "AgentConfig (set once at startup)" {
-    shape: document
-    style.fill: "#16213e"
-    style.font-color: "#f1fa8c"
-  }
-
-  sessions: "sessions/{sessionKey}/ (owned by runner)" {
-    shape: cylinder
-    style.fill: "#16213e"
-    style.font-color: "#ff79c6"
+    style.font-size: 12
   }
 }
 
-# --- Governance + Bus ---
-governance: Governance {
-  style.fill: "#1a1a2e"
-  style.stroke: "#f5a623"
-  style.font-color: "#ffffff"
+# ─── Config ───────────────────────────────────────────────
 
-  local: LocalGovernance {
-    style.fill: "#16213e"
-    style.font-color: "#f5a623"
-  }
-  br: BRGovernance {
-    style.fill: "#16213e"
-    style.font-color: "#f5a623"
-  }
-}
-
-bus: AgentBus {
-  style.fill: "#1a1a2e"
-  style.stroke: "#bd93f9"
-  style.font-color: "#ffffff"
-
-  governed: "Two-layer auth" {
-    style.fill: "#16213e"
-    style.font-color: "#bd93f9"
-  }
-}
-
-# --- Docker Layer ---
-containers: Docker Containers {
-  style.fill: "#1a1a2e"
-  style.stroke: "#bd93f9"
-  style.font-color: "#ffffff"
-
-  agent_a: Agent A {
-    shape: image
-    icon: https://cdn.simpleicons.org/docker/2496ED
-  }
-  agent_b: Agent B {
-    shape: image
-    icon: https://cdn.simpleicons.org/docker/2496ED
-  }
-  browser: Browser Sidecar {
-    shape: image
-    icon: https://cdn.simpleicons.org/googlechrome/4285F4
-  }
-}
-
-# --- Dashboard ---
-dashboard: Dashboard + TUI {
-  style.fill: "#1a1a2e"
-  style.stroke: "#ff79c6"
-  style.font-color: "#ffffff"
-
-  web: Web UI {
-    shape: page
-    style.fill: "#16213e"
-    style.font-color: "#ff79c6"
-  }
-  tui: Terminal UI {
-    style.fill: "#16213e"
-    style.font-color: "#ff79c6"
-  }
-  hotreload: "reconfigure() — no restart" {
-    style.fill: "#16213e"
-    style.font-color: "#50fa7b"
-  }
-}
-
-# --- Connections ---
-channels.telegram -> router.dispatch: InboundMessage
-channels.discord -> router.dispatch: InboundMessage
-channels.webhook -> router.dispatch: InboundMessage
-
-router.dispatch -> runners.native: "{ sessionKey, message }"
-router.dispatch -> runners.docker: "{ sessionKey, message }"
-
-runners.docker -> containers.agent_a: docker exec
-runners.docker -> containers.agent_b: docker exec
-containers.agent_a -> containers.browser: Playwright
-
-containers.agent_a -> bus.governed: call_agent {
-  style.stroke: "#bd93f9"
-  style.stroke-dash: 3
-}
-
-bus.governed -> governance.local: check policy
-bus.governed -> runners: route to callee {
-  style.stroke: "#bd93f9"
-  style.stroke-dash: 3
-}
-
-dashboard.hotreload -> runners: runner.reconfigure() {
-  style.stroke: "#50fa7b"
-  style.stroke-dash: 3
-}
-
-# --- Config ---
 config: openAIOS.yml {
   shape: document
   style.fill: "#2d2d2d"
   style.font-color: "#f1fa8c"
-  near: bottom-center
 }
-config -> runners.config: AgentConfig at startup
+
+# ─── Connections ──────────────────────────────────────────
+
+users -> channels: messages
+
+channels -> engine.router.core: inbound {style.stroke: "#4caf50"}
+engine.router.core -> channels: response {style.stroke: "#4caf50"; style.stroke-dash: 3}
+
+engine.router.core -> engine.gov.local: checkPolicy {style.stroke: "#f44336"}
+engine.router.core -> engine.budget.mgr: check/record {style.stroke: "#ff9800"}
+engine.router.core -> engine.runners: execute turn {style.stroke: "#ff9800"}
+
+engine.runners -> llms: API calls {style.stroke: "#ff9800"}
+engine.runners.docker -> containers: docker exec {style.stroke: "#bd93f9"}
+
+engine.tools.executor -> engine.gov.local: governance gate {style.stroke: "#f44336"}
+
+engine.memory -> engine.tools.registry: memory_search {style.stroke: "#9c27b0"; style.stroke-dash: 3}
+engine.browser -> engine.tools.registry: browser tools {style.stroke: "#9c27b0"; style.stroke-dash: 3}
+engine.plugins.reg -> engine.tools.registry: plugin tools {style.stroke: "#9c27b0"; style.stroke-dash: 3}
+
+engine.auto.cron -> engine.router.core: scheduled dispatch {style.stroke: "#8bc34a"; style.stroke-dash: 3}
+engine.auto.hooks -> engine.router.core: webhook dispatch {style.stroke: "#8bc34a"; style.stroke-dash: 3}
+
+engine.voice -> channels: audio out {style.stroke: "#673ab7"; style.stroke-dash: 3}
+
+engine.router.ws -> engine.canvas.server: events + A2UI {style.stroke: "#03a9f4"; style.stroke-dash: 3}
+
+engine.router.bus -> engine.runners: inter-agent calls {style.stroke: "#bd93f9"; style.stroke-dash: 3}
+
+cli -> engine: manage {style.stroke: "#607d8b"; style.stroke-dash: 3}
+config -> engine: configure {style.stroke: "#f1fa8c"; style.stroke-dash: 3}

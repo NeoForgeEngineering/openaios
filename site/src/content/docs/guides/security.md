@@ -87,22 +87,52 @@ ProtectSystem=strict
 ReadWritePaths=/home/aios
 ```
 
-## Security auditor
+## Security auditor (23 checks)
 
-The built-in SecurityAuditor runs at startup and every 30 minutes.
+The built-in SecurityAuditor runs at startup and every 30 minutes. Run manually with `openaios audit`.
 
-### Static checks
+### Permissions & runner checks
 
 | Finding | Trigger |
 |---------|---------|
 | `OVERLY_BROAD_PERMISSIONS` | `Bash` or `*` in allow without deny rules |
+| `NATIVE_MODE_ENABLED` | Agent running unsandboxed in native mode |
+| `NATIVE_NOT_EXPLICIT` | Native mode without `allow_host_access: true` |
+| `LLM_GATEWAY_MISSING` | Non-claude-code LLM without `llm_config.base_url` |
+
+### Budget & governance checks
+
+| Finding | Trigger |
+|---------|---------|
 | `NO_BUDGET_LIMIT` | Agent not listed in `budget.agents` |
-| `WEBHOOK_NO_SECRET` | Webhook on non-localhost without secret |
 | `AGENT_CALLS_LOCAL_ONLY` | Agent bus with local governance only |
 | `CIRCULAR_AGENT_CALLS` | A → B → A cycle detected |
-| `NATIVE_SAFEGUARD` | Native runner without explicit `allow_host_access: true`; non-claude-code LLM on native without gateway |
+| `RATE_LIMITS_NO_AUDIT` | Rate limits configured without audit logging |
+| `PATH_POLICY_TOO_BROAD` | `/**` allow with no deny rules |
 
-### Dynamic checks
+### Channel security checks
+
+| Finding | Trigger |
+|---------|---------|
+| `WEBHOOK_NO_SECRET` | Webhook on non-localhost without secret |
+| `TELEGRAM_TOKEN_HARDCODED` | Token not using `${ENV_VAR}` reference |
+| `SLACK_NO_SIGNING_SECRET` | Slack on public network without signing secret |
+| `GOOGLE_CHAT_PUBLIC` | Google Chat webhook on public network |
+| `NO_DM_ALLOWLIST` | Multi-channel agent with no DM restrictions |
+| `NO_GROUP_ROUTING` | No mention-gating for group chats |
+
+### Feature security checks
+
+| Finding | Trigger |
+|---------|---------|
+| `MEMORY_API_KEY_MISSING` | Cloud embedding provider without API key |
+| `AUTOMATION_WEBHOOK_NO_TOKEN` | Public automation webhook without auth |
+| `CRON_TOO_FREQUENT` | Cron job running every minute |
+| `GATEWAY_NO_AUTH` | WS gateway enabled without auth token |
+| `BROWSER_NO_URL_POLICY` | Browser enabled with no URL restrictions |
+| `BROWSER_NATIVE_MODE` | Browser + native = full unsandboxed access |
+
+### Runtime anomaly checks
 
 | Finding | Trigger |
 |---------|---------|
@@ -121,15 +151,22 @@ Exit code is non-zero if critical findings exist — useful in CI.
 
 ## Hardening checklist
 
+- [ ] All agents run in Docker (`runner.env: docker`) — native only when explicitly needed
 - [ ] All agents have explicit `permissions.allow` (no `*`)
 - [ ] `Bash` is in `deny` for agents that don't need it
 - [ ] All agents have budget limits
 - [ ] `network.bind` is `tailscale` or `localhost`
 - [ ] Webhooks have secrets configured
+- [ ] Channel tokens use `${ENV_VAR}` references (not hardcoded)
 - [ ] `.env` file has `chmod 600`
 - [ ] Systemd hardening directives are enabled
 - [ ] `openaios audit` returns clean in CI
 - [ ] Docker agents have memory/CPU limits
+- [ ] Browser agents have URL allowlists
+- [ ] Automation webhooks have token auth
+- [ ] WS gateway has auth token if enabled
+- [ ] Rate limits enabled with audit logging
+- [ ] Group routing requires mention for multi-channel agents
+- [ ] DM allowlist configured for public-facing agents
 - [ ] Agent bus calls have explicit callee lists (no wildcards)
-- [ ] Native agents have `runner.native.allow_host_access: true` set explicitly
 - [ ] Non-`claude-code` LLMs use gateway config via `runner.llm_config`

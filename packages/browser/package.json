@@ -1,0 +1,30 @@
+{
+  "name": "@openaios/browser",
+  "version": "0.1.0",
+  "description": "Browser automation via agent-browser for openAIOS",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "tsx --test 'src/__tests__/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@openaios/core": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.5.0"
+  }
+}

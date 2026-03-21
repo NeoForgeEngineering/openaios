@@ -5,6 +5,13 @@ export interface ChannelTarget {
   threadId?: string
 }
 
+export interface Attachment {
+  type: 'image' | 'audio' | 'video' | 'file'
+  url?: string
+  mimeType?: string
+  size?: number
+}
+
 export interface InboundMessage {
   /** Unique message ID within the channel */
   messageId: string
@@ -18,6 +25,12 @@ export interface InboundMessage {
   text: string
   /** Unix timestamp in seconds */
   timestamp: number
+  /** Whether this message is from a group chat */
+  isGroup?: boolean
+  /** Whether the bot was mentioned in the message */
+  mentionsBot?: boolean
+  /** Attached media */
+  attachments?: Attachment[]
 }
 
 export interface OutboundMessage {

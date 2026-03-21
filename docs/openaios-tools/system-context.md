@@ -1,0 +1,52 @@
+# System Context — @openaios/tools (C4 Level 1)
+
+## System Boundary
+
+```
+┌─────────────────────────────────────────────────┐
+│                   OpenAIOS                       │
+│                                                  │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐    │
+│  │ Router   │──▶│ Runner   │──▶│ LLM API  │    │
+│  │ Core     │   │ Adapter  │   │ (ext)    │    │
+│  └──────────┘   └──────────┘   └──────────┘    │
+│       │                                          │
+│       ▼                                          │
+│  ┌──────────────────────────────────────┐       │
+│  │         @openaios/tools              │       │
+│  │  ┌──────────┐  ┌───────────────┐    │       │
+│  │  │ Registry │  │ Executor      │    │       │
+│  │  │ (CRUD)   │  │ (governance)  │    │       │
+│  │  └──────────┘  └───────────────┘    │       │
+│  │  ┌──────────────────────────────┐   │       │
+│  │  │ Built-in Tools               │   │       │
+│  │  │ web-fetch│search│pdf│image   │   │       │
+│  │  └──────────────────────────────┘   │       │
+│  └──────────────────────────────────────┘       │
+│       │              │                           │
+│       ▼              ▼                           │
+│  ┌──────────┐  ┌──────────┐                     │
+│  │Governance│  │ External │                     │
+│  │ Adapter  │  │ APIs     │                     │
+│  └──────────┘  │(Brave,   │                     │
+│                │ etc.)    │                     │
+│                └──────────┘                     │
+└─────────────────────────────────────────────────┘
+```
+
+## External Systems
+
+| System | Interaction | Protocol |
+|--------|------------|----------|
+| Brave Search API | Web search queries | HTTPS |
+| SearXNG | Self-hosted search | HTTPS |
+| Tavily API | AI search | HTTPS |
+| Target URLs | Web fetch | HTTP/HTTPS |
+| BR Platform | Tool catalog sync, policy enforcement | HTTPS |
+
+## Key Relationships
+
+- **RouterCore** dispatches turns to runners; tools are invoked during agent execution
+- **GovernanceAdapter** gates every tool execution via `checkPolicy()`
+- **ToolRegistry** is a shared catalog — other packages (`@openaios/memory`, `@openaios/browser`) register tools into it
+- **Config** controls which search provider is active, URL allow/deny lists

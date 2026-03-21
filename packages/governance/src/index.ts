@@ -1,9 +1,16 @@
+export { type AuditEntry, AuditLog } from './audit-log.js'
 export { BRGovernance } from './br.js'
-export { LocalGovernance } from './local.js'
+export { LocalGovernance, type LocalGovernanceOptions } from './local.js'
+export { PairingManager } from './pairing.js'
+export { PathPolicy } from './path-policy.js'
+export { RateLimiter } from './rate-limiter.js'
 
 import type { GovernanceAdapter } from '@openaios/core'
+import type { AuditLog } from './audit-log.js'
 import { BRGovernance } from './br.js'
 import { LocalGovernance } from './local.js'
+import type { PathPolicy } from './path-policy.js'
+import type { RateLimiter } from './rate-limiter.js'
 
 interface AgentPermissions {
   allow: string[]
@@ -12,6 +19,9 @@ interface AgentPermissions {
 
 interface GovernanceOptions {
   agentPermissions: Record<string, AgentPermissions>
+  pathPolicy?: PathPolicy
+  rateLimiter?: RateLimiter
+  auditLog?: AuditLog
   br?: {
     url: string
     token: string
@@ -26,7 +36,14 @@ interface GovernanceOptions {
 export function createGovernance(
   options: GovernanceOptions,
 ): GovernanceAdapter {
-  const local = new LocalGovernance(options.agentPermissions)
+  const local = new LocalGovernance({
+    agentPermissions: options.agentPermissions,
+    ...(options.pathPolicy !== undefined && { pathPolicy: options.pathPolicy }),
+    ...(options.rateLimiter !== undefined && {
+      rateLimiter: options.rateLimiter,
+    }),
+    ...(options.auditLog !== undefined && { auditLog: options.auditLog }),
+  })
 
   if (!options.br) {
     return local

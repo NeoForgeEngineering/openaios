@@ -10,9 +10,17 @@ import type {
   AgentBusRequest,
   AgentBusResponse,
   AgentConfig,
+  MemoryAdapter,
 } from '@openaios/core'
 import { loadConfig, logger } from '@openaios/core'
 import { createGovernance } from '@openaios/governance'
+import {
+  createEmbeddingProvider,
+  createMemoryGetTool,
+  createMemorySearchTool,
+  MemoryStore,
+} from '@openaios/memory'
+import { Collector } from '@openaios/observability'
 import type { AgentRoute } from '@openaios/router'
 import {
   AgentBus,
@@ -20,11 +28,27 @@ import {
   RouterCore,
   SQLiteSessionStore,
 } from '@openaios/router'
+import type { ToolGate } from '@openaios/runner'
 import {
   CapabilityProvisioner,
   ContainerOrchestrator,
   createRunner,
 } from '@openaios/runner'
+import {
+  createFilesystemEditTool,
+  createFilesystemGlobTool,
+  createFilesystemGrepTool,
+  createFilesystemReadTool,
+  createFilesystemWriteTool,
+  createImageAnalyzeTool,
+  createPdfParseTool,
+  createShellExecTool,
+  createWebFetchTool,
+  createWebSearchTool,
+  RoleRegistry,
+  ToolExecutor,
+  ToolRegistry,
+} from '@openaios/tools'
 import { SecurityAuditor } from '../audit/auditor.js'
 import type { AgentPatch } from '../dashboard/config-writer.js'
 import { patchAgentInConfig } from '../dashboard/config-writer.js'
@@ -66,8 +90,44 @@ export async function startCommand(options: {
   const agentPermissions = Object.fromEntries(
     config.agents.map((a) => [a.name, a.permissions]),
   )
+  // Path policy — restrict filesystem tools to workspace by default
+  const { PathPolicy } = await import('@openaios/governance')
+  let pathPolicy: InstanceType<typeof PathPolicy>
+  if (config.governance?.paths) {
+    // Transform config paths to PathPolicy format
+    const configPaths: Record<string, { allow?: string[]; deny?: string[] }> =
+      {}
+    for (const [name, p] of Object.entries(config.governance.paths)) {
+      configPaths[name] = {
+        ...(p.allow !== undefined && { allow: p.allow }),
+        ...(p.deny !== undefined && { deny: p.deny }),
+      }
+    }
+    pathPolicy = new PathPolicy(configPaths)
+  } else {
+    // Default: each agent can only access its own workspace + memory + cwd
+    const defaultPaths: Record<string, { allow?: string[]; deny?: string[] }> =
+      {}
+    for (const agent of config.agents) {
+      defaultPaths[agent.name] = {
+        allow: [
+          join(workspacesDir, '**'),
+          join(memoryDir, '**'),
+          join(process.cwd(), '**'),
+        ],
+        deny: ['**/.env', '**/.env.*', '**/node_modules/**'],
+      }
+    }
+    pathPolicy = new PathPolicy(defaultPaths)
+    logger.info(
+      '[openaios]',
+      'Default path policy: agents restricted to workspace + memory + cwd',
+    )
+  }
+
   const governance = createGovernance({
     agentPermissions,
+    pathPolicy,
     ...(config.governance?.br !== undefined && {
       br: {
         url: config.governance.br.url,
@@ -76,6 +136,59 @@ export async function startCommand(options: {
       },
     }),
   })
+
+  // Roles
+  const roleRegistry = new RoleRegistry()
+  roleRegistry.loadFromDirectory(join(process.cwd(), 'roles'))
+  logger.info(
+    '[openaios]',
+    `Roles: ${roleRegistry.list().length} loaded (${roleRegistry
+      .list()
+      .map((r) => r.id)
+      .join(', ')})`,
+  )
+
+  // Tool registry
+  const toolRegistry = setupTools(config.tools)
+  logger.info(
+    '[openaios]',
+    `Tool registry: ${toolRegistry.list().length} built-in tools registered`,
+  )
+
+  // Semantic memory
+  const memoryStore = setupMemory(config.memory, memoryDir)
+  if (memoryStore) {
+    toolRegistry.add(createMemorySearchTool(memoryStore))
+    toolRegistry.add(createMemoryGetTool(memoryStore))
+    logger.info(
+      '[openaios]',
+      'Semantic memory enabled with memory_search + memory_get tools',
+    )
+  }
+
+  // Governed tool gate — used by SDK runners (external, anthropic-api, openai-api)
+  // Every tool call goes through: ToolExecutor → governance.checkPolicy() → tool.execute()
+  const toolExecutor = new ToolExecutor(toolRegistry, governance)
+  const toolGate: ToolGate = {
+    execute: (name, input, ctx) => toolExecutor.execute(name, input, ctx),
+    listForAgent: (agentCfg) => {
+      const allowed = new Set(agentCfg.allowedTools)
+      const denied = new Set(agentCfg.deniedTools)
+      const hasWildcard = allowed.has('*')
+      return toolRegistry
+        .list()
+        .filter((t) => {
+          if (denied.has(t.name)) return false
+          if (hasWildcard) return true
+          return allowed.has(t.name)
+        })
+        .map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema,
+        }))
+    },
+  }
 
   // Detect if any agent needs docker mode
   const hasDockerAgents = config.agents.some((a) => a.runner.env === 'docker')
@@ -250,6 +363,7 @@ export async function startCommand(options: {
 
     const runner = createRunner(agentConfig, providers, agent.runner, {
       ...(orchestrator !== undefined && { orchestrator }),
+      toolGate,
     })
 
     agentModels.set(agent.name, agent.model.default)
@@ -326,6 +440,36 @@ export async function startCommand(options: {
     bus,
   })
 
+  // Observability
+  const collector = new Collector({
+    dbPath: join(dataDir, 'observability.db'),
+    ...(config.governance?.br !== undefined && {
+      br: {
+        url: config.governance.br.url,
+        token: config.governance.br.token,
+      },
+    }),
+  })
+
+  // Record every completed turn
+  router.events.on('turn', (evt: Record<string, unknown>) => {
+    if (evt.type === 'turn:complete') {
+      collector.recordTurn({
+        agentName: String(evt.agentName),
+        sessionKey: String(evt.userId),
+        channel: String(evt.channel),
+        model: String(evt.model),
+        userMessage: '', // not available in event yet
+        agentMessage: String(evt.output ?? '').slice(0, 10000),
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: Number(evt.costUsd ?? 0),
+        durationMs: Number(evt.durationMs ?? 0),
+        timestampMs: Number(evt.timestampMs),
+      })
+    }
+  })
+
   /**
    * Hot-reload an agent's config when governance or persona changes.
    * Propagates new systemPrompt/allowedTools/deniedTools to the runner
@@ -371,12 +515,19 @@ export async function startCommand(options: {
     configPath,
     skillsDir,
     onAgentUpdate,
+    routerEvents: router.events,
+    roleRegistry,
+    collector,
+    ...(config.network.admin_token !== undefined && {
+      adminToken: config.network.admin_token,
+    }),
   })
   dashboardServer.register()
 
   // --- Security auditor ---
   const auditor = new SecurityAuditor({
     config,
+    configPath,
     sessionStore,
     budgetManager: budget,
   })
@@ -419,6 +570,8 @@ export async function startCommand(options: {
     httpServer.close()
     if (provisioner) await provisioner.deprovisionAll()
     if (orchestrator) await orchestrator.stopAll()
+    if (memoryStore) memoryStore.close()
+    collector.close()
     budget.close()
     process.exit(0)
   }
@@ -513,6 +666,98 @@ function resolveBindAddress(bind: string): string {
     return '127.0.0.1'
   }
   return bind
+}
+
+function setupTools(
+  toolsConfig?: ReturnType<typeof loadConfig>['tools'],
+): ToolRegistry {
+  const registry = new ToolRegistry()
+
+  // Register built-in tools
+  registry.add(
+    createWebFetchTool({
+      ...(toolsConfig?.url_allowlist !== undefined && {
+        urlAllowlist: toolsConfig.url_allowlist,
+      }),
+      ...(toolsConfig?.url_denylist !== undefined && {
+        urlDenylist: toolsConfig.url_denylist,
+      }),
+    }),
+  )
+
+  if (toolsConfig?.search_provider !== undefined) {
+    registry.add(
+      createWebSearchTool({
+        provider: toolsConfig.search_provider,
+        ...(toolsConfig.search_api_key !== undefined && {
+          apiKey: toolsConfig.search_api_key,
+        }),
+      }),
+    )
+  }
+
+  registry.add(createPdfParseTool())
+  registry.add(createImageAnalyzeTool())
+
+  // Core coding tools — governed filesystem + shell access
+  registry.add(createFilesystemReadTool())
+  registry.add(createFilesystemWriteTool())
+  registry.add(createFilesystemEditTool())
+  registry.add(createFilesystemGlobTool())
+  registry.add(createFilesystemGrepTool())
+  registry.add(createShellExecTool())
+
+  return registry
+}
+
+function setupMemory(
+  memoryConfig: ReturnType<typeof loadConfig>['memory'],
+  memoryDir: string,
+): MemoryAdapter | undefined {
+  // Only enable semantic memory if an embedding provider is configured
+  if (memoryConfig.provider === undefined) {
+    return undefined
+  }
+
+  const provider = createEmbeddingProvider(
+    memoryConfig.provider,
+    memoryConfig.model ?? getDefaultModel(memoryConfig.provider),
+    {
+      ...(memoryConfig.api_key !== undefined && {
+        apiKey: memoryConfig.api_key,
+      }),
+      ...(memoryConfig.base_url !== undefined && {
+        baseUrl: memoryConfig.base_url,
+      }),
+      ...(memoryConfig.dimensions !== undefined && {
+        dimensions: memoryConfig.dimensions,
+      }),
+    },
+  )
+
+  return new MemoryStore({
+    dir: memoryDir,
+    embeddingProvider: provider,
+    topK: memoryConfig.top_k,
+    decayHalfLifeDays: memoryConfig.decay_half_life_days,
+  })
+}
+
+function getDefaultModel(provider: string): string {
+  switch (provider) {
+    case 'openai':
+      return 'text-embedding-3-small'
+    case 'ollama':
+      return 'nomic-embed-text'
+    case 'voyage':
+      return 'voyage-3'
+    case 'mistral':
+      return 'mistral-embed'
+    case 'gemini':
+      return 'text-embedding-004'
+    default:
+      return 'default'
+  }
 }
 
 function resolvePersona(persona: string): string {

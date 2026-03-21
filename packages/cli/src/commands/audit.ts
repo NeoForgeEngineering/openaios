@@ -7,7 +7,10 @@ import { SecurityAuditor } from '../audit/auditor.js'
 export async function auditCommand(options: {
   config?: string
 }): Promise<void> {
-  const config = loadConfig(options.config)
+  const configPath = resolve(
+    options.config ?? process.env.OPENAIOS_CONFIG ?? 'openAIOS.yml',
+  )
+  const config = loadConfig(configPath)
   const dataDir = resolve(config.data.dir)
 
   let sessionStore: SQLiteSessionStore | undefined
@@ -28,6 +31,7 @@ export async function auditCommand(options: {
 
   const auditor = new SecurityAuditor({
     config,
+    configPath,
     sessionStore: sessionStore ?? makeFallbackStore(),
     budgetManager: budget,
   })

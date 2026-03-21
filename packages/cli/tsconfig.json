@@ -12,7 +12,10 @@
       "@openaios/budget": ["../budget/src/index.ts"],
       "@openaios/governance": ["../governance/src/index.ts"],
       "@openaios/router": ["../router/src/index.ts"],
-      "@openaios/channels": ["../channels/src/index.ts"]
+      "@openaios/channels": ["../channels/src/index.ts"],
+      "@openaios/tools": ["../tools/src/index.ts"],
+      "@openaios/memory": ["../memory/src/index.ts"],
+      "@openaios/observability": ["../observability/src/index.ts"]
     }
   },
   "references": [
@@ -20,8 +23,11 @@
     { "path": "../runner" },
     { "path": "../budget" },
     { "path": "../governance" },
+    { "path": "../observability" },
     { "path": "../router" },
-    { "path": "../channels" }
+    { "path": "../channels" },
+    { "path": "../tools" },
+    { "path": "../memory" }
   ],
   "include": ["src"]
 }

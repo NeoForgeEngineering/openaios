@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-openAIOS is built on four core interfaces. Implement any of them to extend the system with custom backends.
+openAIOS is built on core interfaces in `@openaios/core`. Implement any of them to extend the system with custom backends.
 
 ## RunnerAdapter
 
@@ -222,3 +222,66 @@ interface AgentBusEntry {
 **Two-layer governance:**
 1. `GovernanceAdapter.checkPolicy` — treats `call_agent` as a regular tool
 2. `allowedCallees` — explicit callee allowlist (skipped for federated peer requests)
+
+## ToolDefinition
+
+Interface for registering tools into the `@openaios/tools` ToolRegistry.
+
+```typescript
+interface ToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: z.ZodType;
+  execute(input: unknown, ctx: ToolContext): Promise<ToolResult>;
+}
+
+interface ToolContext {
+  sessionKey: string;
+  agentName: string;
+  workspaceDir: string;
+}
+
+interface ToolResult {
+  type: 'text' | 'json' | 'image' | 'error';
+  content: string | Record<string, unknown>;
+}
+```
+
+Every tool execution passes through governance (`checkPolicy`) before running.
+
+## MemoryAdapter
+
+Interface for semantic memory storage. Implemented by `MemoryStore` in `@openaios/memory`.
+
+```typescript
+interface MemoryEntry {
+  key: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  score?: number;
+  createdAt: string;   // ISO 8601
+  updatedAt: string;
+}
+
+interface MemoryAdapter {
+  store(agentName: string, key: string, content: string, metadata?: Record<string, unknown>): Promise<void>;
+  search(agentName: string, query: string, opts?: { topK?: number; minScore?: number }): Promise<MemoryEntry[]>;
+  get(agentName: string, key: string): Promise<MemoryEntry | undefined>;
+  delete(agentName: string, key: string): Promise<void>;
+  buildPromptContext(agentName: string, query: string, maxTokens: number): Promise<string>;
+  close(): void;
+}
+```
+
+Memories are scoped by `agentName` — per-agent isolation enforced at query level.
+
+## RouterEvent
+
+Emitted by `RouterCore.events` for real-time monitoring via the WS Gateway.
+
+```typescript
+type RouterEvent =
+  | { type: 'turn:start'; agentName: string; userId: string; timestampMs: number }
+  | { type: 'turn:complete'; agentName: string; userId: string; output: string; costUsd?: number; model: string; timestampMs: number }
+  | { type: 'turn:error'; agentName: string; userId: string; error: string; timestampMs: number }
+```

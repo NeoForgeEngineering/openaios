@@ -19,7 +19,8 @@
     "test": "tsx --test 'src/__tests__/**/*.test.ts'"
   },
   "dependencies": {
-    "@openaios/core": "workspace:*"
+    "@openaios/core": "workspace:*",
+    "node-pty": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -27,9 +28,9 @@
     "typescript": "^5.5.0"
   },
   "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.26.0",
     "ollama": ">=0.5.0",
-    "openai": ">=4.0.0",
-    "@anthropic-ai/sdk": ">=0.26.0"
+    "openai": ">=4.0.0"
   },
   "peerDependenciesOptional": {
     "ollama": true,

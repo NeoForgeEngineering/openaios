@@ -14,11 +14,15 @@ const ConfigSchema = z.object({
   agents: z.array(AgentSchema).min(1),
   models: z.object({ providers: ModelProvidersSchema }).optional(),
   budget: BudgetSchema.optional(),
-  governance: GovernanceSchema.optional(),
+  governance: GovernanceSchema.optional(),   // + paths, rate_limits, pairing, audit
   network: NetworkSchema.default({}),
   data: DataSchema.default({}),
-  memory: MemorySchema.default({}),
+  memory: MemorySchema.default({}),          // + provider, model, api_key, top_k, decay
   skills: SkillsSchema.default({}),
+  tools: ToolsSchema.optional(),             // search_provider, url_allowlist, url_denylist
+  voice: VoiceSchema.optional(),             // tts + stt provider config
+  automation: AutomationSchema.optional(),   // cron jobs + webhook paths
+  gateway: GatewaySchema.optional(),         // WS gateway enabled + auth_token
   federation: FederationSchema.optional(),
 });
 ```

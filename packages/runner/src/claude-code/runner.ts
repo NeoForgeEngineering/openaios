@@ -41,7 +41,7 @@ export class ClaudeCodeRunner implements RunnerAdapter {
   private config: AgentConfig
   private readonly bin: string
   private readonly llmEnv: Record<string, string>
-  /** sessionKey → claude Code session ID for --resume */
+  /** sessionKey → claude session ID for --resume */
   private readonly sessions = new Map<string, string>()
 
   constructor(config: AgentConfig, options: ClaudeCodeRunnerOptions = {}) {
@@ -89,10 +89,7 @@ export class ClaudeCodeRunner implements RunnerAdapter {
     const proc = spawn(this.bin, args, {
       cwd: workspaceDir,
       env,
-      // Do NOT use shell — prevents injection via user message
       shell: false,
-      // stdin must be 'ignore' (maps to /dev/null) — if left as the default
-      // pipe, claude blocks waiting for stdin input before making API calls.
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
@@ -109,7 +106,6 @@ export class ClaudeCodeRunner implements RunnerAdapter {
       stderrOutput += chunk
     })
 
-    // Collect stdout as lines, parse JSONL
     proc.stdout.setEncoding('utf-8')
 
     const parseStream = async function* (): AsyncGenerator<StreamChunk, void> {
@@ -174,7 +170,6 @@ export class ClaudeCodeRunner implements RunnerAdapter {
       )
     }
 
-    // Store session ID for next turn
     this.sessions.set(input.sessionKey, lastClaudeSessionId)
 
     return {
@@ -227,7 +222,6 @@ export function buildClaudeArgs(opts: {
     args.push('--model', model)
   }
 
-  // Only resume if the session ID looks like a real Claude session ID (UUID-like).
   if (resumeId && /^[0-9a-f-]{20,}$/i.test(resumeId)) {
     args.push('--resume', resumeId)
   }
